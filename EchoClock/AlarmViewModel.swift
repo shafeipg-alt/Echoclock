@@ -98,6 +98,21 @@ final class AlarmViewModel: ObservableObject {
         }
     }
 
+    /// 应用一个常用闹钟预设，当前产品只维护一个智能闹钟配置。
+    func applyPresetWakeWindow(startHour: Int, startMinute: Int, endHour: Int, endMinute: Int, turnOn: Bool = true) {
+        alarm.wakeStartTime = Self.clockTime(hour: startHour, minute: startMinute)
+        alarm.wakeEndTime = Self.clockTime(hour: endHour, minute: endMinute)
+        alarm = alarm.normalized()
+        saveAlarm()
+        if turnOn && !alarm.isOn {
+            alarm.isOn = true
+            saveAlarm()
+            activateAlarm()
+        } else if alarm.isOn {
+            syncToWatch()
+        }
+    }
+
     /// 更新预设铃声
     func updateSound(_ sound: AlarmSound) {
         alarm.sound = sound
@@ -222,6 +237,18 @@ final class AlarmViewModel: ObservableObject {
         case .monitoring: return "范围内，正在分析心率"
         case .triggered: return "已触发唤醒"
         }
+    }
+
+    private static func clockTime(hour: Int, minute: Int) -> Date {
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        components.hour = hour
+        components.minute = minute
+        components.second = 0
+        let today = Calendar.current.date(from: components) ?? Date()
+        if today <= Date() {
+            return Calendar.current.date(byAdding: .day, value: 1, to: today) ?? today
+        }
+        return today
     }
 
     private func updateWatchStatus() {

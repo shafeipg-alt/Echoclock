@@ -29,11 +29,45 @@ struct ContentView: View {
         case profile
     }
 
+    private enum ActiveSheet: Identifiable {
+        case alarmEditor
+        case device
+        case sleepReminder
+        case language
+        case theme
+        case soundLibrary
+        case heartRateSettings
+        case feedback
+        case about
+
+        var id: String {
+            switch self {
+            case .alarmEditor: return "alarmEditor"
+            case .device: return "device"
+            case .sleepReminder: return "sleepReminder"
+            case .language: return "language"
+            case .theme: return "theme"
+            case .soundLibrary: return "soundLibrary"
+            case .heartRateSettings: return "heartRateSettings"
+            case .feedback: return "feedback"
+            case .about: return "about"
+            }
+        }
+    }
+
+    private struct Notice: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
+    }
+
     @StateObject private var session = AppSessionViewModel()
     @StateObject private var viewModel = AlarmViewModel()
     @State private var showRangePicker = false
     @State private var selectedDashboardTab: DashboardTab = .alarm
     @State private var isShowingLaunch = true
+    @State private var activeSheet: ActiveSheet?
+    @State private var notice: Notice?
 
     var body: some View {
         ZStack {
@@ -113,6 +147,12 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showRangePicker) {
             rangePickerSheet
+        }
+        .sheet(item: $activeSheet) { sheet in
+            interactiveSheet(sheet)
+        }
+        .alert(item: $notice) { notice in
+            Alert(title: Text(notice.title), message: Text(notice.message), dismissButton: .default(Text("知道了")))
         }
     }
 
@@ -216,6 +256,10 @@ struct ContentView: View {
         .padding(24)
         .opacity(viewModel.alarm.isOn ? 1 : 0.58)
         .glassCard(cornerRadius: 28)
+        .contentShape(RoundedRectangle(cornerRadius: 28))
+        .onTapGesture {
+            activeSheet = .alarmEditor
+        }
     }
 
     private var regularAlarmCard: some View {
@@ -255,6 +299,11 @@ struct ContentView: View {
         .padding(24)
         .opacity(0.58)
         .glassCard(cornerRadius: 28)
+        .contentShape(RoundedRectangle(cornerRadius: 28))
+        .onTapGesture {
+            viewModel.applyPresetWakeWindow(startHour: 7, startMinute: 45, endHour: 8, endMinute: 15)
+            notice = Notice(title: "已套用常规闹钟", message: "已将智能唤醒范围设为 07:45 - 08:15，并开启监测。")
+        }
     }
 
     private func toggleSwitch(isOn: Bool) -> some View {
@@ -278,7 +327,9 @@ struct ContentView: View {
     private var sleepBentoGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
             bentoMetricCard(icon: "moon.zzz.fill", title: "睡眠效率", value: "94", suffix: "%", accent: LumeColor.secondary, progress: 0.94)
+                .onTapGesture { selectedDashboardTab = .stats }
             heartRateBentoCard
+                .onTapGesture { selectedDashboardTab = .sleep }
         }
         .padding(.top, 12)
     }
@@ -365,6 +416,7 @@ struct ContentView: View {
                 .padding(.top, 44)
 
                 monitoringHeartRateCard
+                    .onTapGesture { activeSheet = .heartRateSettings }
                 environmentGrid
 
                 Button {
@@ -431,7 +483,13 @@ struct ContentView: View {
     private var environmentGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
             smallEnvironmentCard(icon: "thermometer.medium", title: "室温", value: "22.5°C", accent: LumeColor.secondary)
+                .onTapGesture {
+                    notice = Notice(title: "室温数据", message: "当前为前端预留展示位。后续可接入 HomeKit、Matter 温湿度计或第三方 IoT 设备。")
+                }
             smallEnvironmentCard(icon: "speaker.wave.1.fill", title: "环境音", value: "32 dB", accent: LumeColor.primary)
+                .onTapGesture {
+                    notice = Notice(title: "环境音数据", message: "当前为前端预留展示位。后续需要申请麦克风权限，并加入本地分贝采样逻辑。")
+                }
         }
     }
 
@@ -504,13 +562,20 @@ struct ContentView: View {
         .padding(24)
         .frame(maxWidth: .infinity)
         .glassCard(cornerRadius: 28)
+        .contentShape(RoundedRectangle(cornerRadius: 28))
+        .onTapGesture {
+            notice = Notice(title: "睡眠分数", message: "当前报告根据演示数据展示。接入 HealthKit 睡眠样本后，可按入睡时长、深睡比例、心率稳定度生成真实评分。")
+        }
     }
 
     private var sleepMetricGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             compactMetric(title: "入睡时间", value: "23:15")
+                .onTapGesture { notice = Notice(title: "入睡时间", message: "后续将从 HealthKit 睡眠分析样本中读取。") }
             compactMetric(title: "醒来时间", value: viewModel.alarm.formattedWakeEndTime)
+                .onTapGesture { activeSheet = .alarmEditor }
             compactMetric(title: "深睡时长", value: "2.5h")
+                .onTapGesture { notice = Notice(title: "深睡时长", message: "后续将基于 Apple Watch 睡眠分期数据计算。") }
         }
     }
 
@@ -580,6 +645,10 @@ struct ContentView: View {
         }
         .padding(20)
         .glassCard(cornerRadius: 24)
+        .contentShape(RoundedRectangle(cornerRadius: 24))
+        .onTapGesture {
+            notice = Notice(title: "睡眠分期", message: "这里展示智能唤醒在睡眠周期中的位置。后续接入真实睡眠分期后，可查看整晚深睡/浅睡/清醒区间。")
+        }
     }
 
     private func legendDot(color: Color, text: String) -> some View {
@@ -608,6 +677,8 @@ struct ContentView: View {
         }
         .padding(20)
         .glassCard(cornerRadius: 24)
+        .contentShape(RoundedRectangle(cornerRadius: 24))
+        .onTapGesture { selectedDashboardTab = .sleep }
     }
 
     private var bottomNavigationBar: some View {
@@ -660,6 +731,232 @@ struct ContentView: View {
             Text(value)
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(valueColor)
+        }
+    }
+
+    @ViewBuilder
+    private func interactiveSheet(_ sheet: ActiveSheet) -> some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    switch sheet {
+                    case .alarmEditor:
+                        alarmEditorContent
+                    case .device:
+                        deviceSettingsContent
+                    case .sleepReminder:
+                        sleepReminderContent
+                    case .language:
+                        simpleSettingContent(
+                            icon: "globe",
+                            title: "界面语言",
+                            message: "当前仅提供中文界面。后续接入本地化资源后，可在这里切换 English、繁体中文等语言。",
+                            actionTitle: "知道了",
+                            action: { activeSheet = nil }
+                        )
+                    case .theme:
+                        simpleSettingContent(
+                            icon: "paintpalette.fill",
+                            title: "主题切换",
+                            message: "当前已启用交互稿中的极光深色主题。浅色主题需要补齐同一套色彩变量后开放切换。",
+                            actionTitle: "保持极光深色",
+                            action: { activeSheet = nil }
+                        )
+                    case .soundLibrary:
+                        soundLibraryContent
+                    case .heartRateSettings:
+                        heartRateSettingsContent
+                    case .feedback:
+                        simpleSettingContent(
+                            icon: "bubble.left.and.bubble.right.fill",
+                            title: "意见反馈",
+                            message: "反馈入口已预留。后续接入 EMAS 云函数或 MemFire Cloud 后，可把用户建议写入反馈表。",
+                            actionTitle: "我知道了",
+                            action: { activeSheet = nil }
+                        )
+                    case .about:
+                        simpleSettingContent(
+                            icon: "moon.stars.fill",
+                            title: "关于 Lume",
+                            message: "Lume 是基于 Apple Watch 心率和智能唤醒窗口的浅睡眠闹钟。当前版本已接入 HealthKit、WatchConnectivity 与 EMAS 登录基础能力。",
+                            actionTitle: "完成",
+                            action: { activeSheet = nil }
+                        )
+                    }
+                }
+                .padding(24)
+            }
+            .background(appBackground)
+            .navigationTitle(sheetTitle(sheet))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { activeSheet = nil }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDetents([.medium, .large])
+    }
+
+    private func sheetTitle(_ sheet: ActiveSheet) -> String {
+        switch sheet {
+        case .alarmEditor: return "编辑闹钟"
+        case .device: return "我的设备"
+        case .sleepReminder: return "睡眠提醒"
+        case .language: return "界面语言"
+        case .theme: return "主题切换"
+        case .soundLibrary: return "闹钟铃声库"
+        case .heartRateSettings: return "心率监测设置"
+        case .feedback: return "意见反馈"
+        case .about: return "关于 Lume"
+        }
+    }
+
+    private var alarmEditorContent: some View {
+        VStack(spacing: 18) {
+            VStack(spacing: 12) {
+                DatePicker(
+                    "开始",
+                    selection: Binding(get: { viewModel.alarm.wakeStartTime }, set: { viewModel.updateWakeStartTime($0) }),
+                    displayedComponents: .hourAndMinute
+                )
+                DatePicker(
+                    "截止",
+                    selection: Binding(get: { viewModel.alarm.wakeEndTime }, set: { viewModel.updateWakeEndTime($0) }),
+                    displayedComponents: .hourAndMinute
+                )
+            }
+            .datePickerStyle(.compact)
+            .padding(18)
+            .glassCard(cornerRadius: 22)
+
+            sheetActionButton(title: viewModel.alarm.isOn ? "停止智能闹钟" : "开启智能闹钟", icon: viewModel.alarm.isOn ? "stop.fill" : "play.fill") {
+                viewModel.toggleAlarm()
+            }
+
+            sheetActionButton(title: "套用工作日 08:15", icon: "calendar.badge.clock") {
+                viewModel.applyPresetWakeWindow(startHour: 7, startMinute: 45, endHour: 8, endMinute: 15)
+            }
+        }
+    }
+
+    private var deviceSettingsContent: some View {
+        VStack(spacing: 14) {
+            statusTile(icon: "applewatch", title: "Apple Watch", value: viewModel.watchStatus, accent: LumeColor.primary)
+            statusTile(icon: "dot.radiowaves.left.and.right", title: "Watch 信号", value: viewModel.wearableSignalStatus, accent: LumeColor.secondary)
+            statusTile(icon: "heart.fill", title: "HealthKit", value: viewModel.healthAuthStatus, accent: .red.opacity(0.86))
+            sheetActionButton(title: "重新连接 Apple Watch", icon: "applewatch.and.arrow.forward") {
+                viewModel.connectWearable()
+            }
+        }
+    }
+
+    private var sleepReminderContent: some View {
+        VStack(spacing: 14) {
+            statusTile(icon: "bell.badge.fill", title: "提醒状态", value: viewModel.alarm.isOn ? "已开启" : "未开启", accent: LumeColor.secondary)
+            statusTile(icon: "clock.badge.checkmark.fill", title: "唤醒窗口", value: viewModel.alarm.formattedWakeWindow, accent: LumeColor.primary)
+            sheetActionButton(title: "编辑唤醒窗口", icon: "clock") {
+                activeSheet = .alarmEditor
+            }
+            sheetActionButton(title: viewModel.alarm.isOn ? "关闭睡眠提醒" : "开启睡眠提醒", icon: viewModel.alarm.isOn ? "bell.slash.fill" : "bell.fill") {
+                viewModel.toggleAlarm()
+            }
+        }
+    }
+
+    private var soundLibraryContent: some View {
+        VStack(spacing: 10) {
+            ForEach(AlarmSound.allCases, id: \.self) { sound in
+                Button {
+                    viewModel.updateSound(sound)
+                    viewModel.previewSelectedSound()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: sound == viewModel.alarm.sound ? "checkmark.circle.fill" : "music.note")
+                            .foregroundStyle(sound == viewModel.alarm.sound ? LumeColor.primary : LumeColor.textMuted)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(sound.displayName)
+                                .font(.headline)
+                                .foregroundStyle(LumeColor.text)
+                            Text(sound.description)
+                                .font(.caption)
+                                .foregroundStyle(LumeColor.textMuted)
+                        }
+                        Spacer()
+                        Image(systemName: "speaker.wave.2.fill")
+                            .foregroundStyle(LumeColor.secondary)
+                    }
+                    .padding(16)
+                    .glassCard(cornerRadius: 18)
+                }
+            }
+        }
+    }
+
+    private var heartRateSettingsContent: some View {
+        VStack(spacing: 14) {
+            statusTile(icon: "heart.text.square.fill", title: "实时心率", value: heartRateText, accent: .red.opacity(0.86))
+            statusTile(icon: "sensor.tag.radiowaves.forward.fill", title: "心率来源", value: viewModel.heartRateSourceStatus, accent: LumeColor.secondary)
+            statusTile(icon: "checkmark.seal.fill", title: "唤醒判定", value: viewModel.triggerReasonStatus, accent: LumeColor.primary)
+            sheetActionButton(title: "重新申请 HealthKit 权限", icon: "heart.fill") {
+                Task {
+                    await viewModel.requestPermissions()
+                }
+            }
+        }
+    }
+
+    private func simpleSettingContent(icon: String, title: String, message: String, actionTitle: String, action: @escaping () -> Void) -> some View {
+        VStack(spacing: 18) {
+            Image(systemName: icon)
+                .font(.system(size: 38))
+                .foregroundStyle(LumeColor.primary)
+                .frame(width: 82, height: 82)
+                .glassCard(cornerRadius: 41)
+            Text(title)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(LumeColor.text)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(LumeColor.textMuted)
+                .multilineTextAlignment(.center)
+            sheetActionButton(title: actionTitle, icon: "checkmark") {
+                action()
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 20)
+    }
+
+    private func statusTile(icon: String, title: String, value: String, accent: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(accent)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(accent.opacity(0.14)))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(LumeColor.textMuted)
+                Text(value)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(LumeColor.text)
+            }
+            Spacer()
+        }
+        .padding(16)
+        .glassCard(cornerRadius: 18)
+    }
+
+    private func sheetActionButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.headline)
+                .foregroundStyle(LumeColor.background)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 15)
+                .background(Capsule().fill(LumeColor.primary))
         }
     }
 
@@ -763,42 +1060,65 @@ struct ContentView: View {
 
     private var profileMenuList: some View {
         VStack(spacing: 0) {
-            profileMenuRow(icon: "applewatch", title: "我的设备", value: shortWatchStatus, accent: LumeColor.primary)
+            profileMenuRow(icon: "applewatch", title: "我的设备", value: shortWatchStatus, accent: LumeColor.primary) {
+                viewModel.connectWearable()
+                activeSheet = .device
+            }
             dividerLine
-            profileMenuRow(icon: "bell.badge.fill", title: "睡眠提醒", value: viewModel.alarm.isOn ? "已开启" : "未开启", accent: LumeColor.secondary)
+            profileMenuRow(icon: "bell.badge.fill", title: "睡眠提醒", value: viewModel.alarm.isOn ? "已开启" : "未开启", accent: LumeColor.secondary) {
+                activeSheet = .sleepReminder
+            }
             dividerLine
-            profileMenuRow(icon: "globe", title: "界面语言", value: "中文", accent: LumeColor.primary)
+            profileMenuRow(icon: "globe", title: "界面语言", value: "中文", accent: LumeColor.primary) {
+                activeSheet = .language
+            }
             dividerLine
-            profileMenuRow(icon: "paintpalette.fill", title: "主题切换", value: "极光深色", accent: LumeColor.secondary)
+            profileMenuRow(icon: "paintpalette.fill", title: "主题切换", value: "极光深色", accent: LumeColor.secondary) {
+                activeSheet = .theme
+            }
             dividerLine
-            profileMenuRow(icon: "music.note.list", title: "闹钟铃声库", value: viewModel.alarm.sound.displayName, accent: Color(red: 0.82, green: 0.74, blue: 1.0))
+            profileMenuRow(icon: "music.note.list", title: "闹钟铃声库", value: viewModel.alarm.sound.displayName, accent: Color(red: 0.82, green: 0.74, blue: 1.0)) {
+                activeSheet = .soundLibrary
+            }
             dividerLine
-            profileMenuRow(icon: "heart.text.square.fill", title: "心率监测设置", value: viewModel.healthAuthStatus, accent: LumeColor.primary)
+            profileMenuRow(icon: "heart.text.square.fill", title: "心率监测设置", value: viewModel.healthAuthStatus, accent: LumeColor.primary) {
+                activeSheet = .heartRateSettings
+            }
+            dividerLine
+            profileMenuRow(icon: "bubble.left.and.bubble.right.fill", title: "意见反馈", value: "提交建议", accent: LumeColor.textMuted) {
+                activeSheet = .feedback
+            }
+            dividerLine
+            profileMenuRow(icon: "info.circle.fill", title: "关于 Lume", value: "当前版本", accent: LumeColor.textMuted) {
+                activeSheet = .about
+            }
         }
         .glassCard(cornerRadius: 24)
     }
 
-    private func profileMenuRow(icon: String, title: String, value: String, accent: Color) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon)
-                .foregroundStyle(accent)
-                .frame(width: 40, height: 40)
-                .background(Circle().fill(accent.opacity(0.12)))
-            Text(title)
-                .font(.subheadline)
-                .foregroundStyle(LumeColor.text)
-            Spacer()
-            Text(value)
-                .font(.caption)
-                .foregroundStyle(LumeColor.textMuted.opacity(0.72))
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(LumeColor.textMuted.opacity(0.5))
+    private func profileMenuRow(icon: String, title: String, value: String, accent: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .foregroundStyle(accent)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(accent.opacity(0.12)))
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(LumeColor.text)
+                Spacer()
+                Text(value)
+                    .font(.caption)
+                    .foregroundStyle(LumeColor.textMuted.opacity(0.72))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(LumeColor.textMuted.opacity(0.5))
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
     }
 
     private var dividerLine: some View {
