@@ -498,9 +498,18 @@ struct ContentView: View {
 // MARK: - 登录页面
 
 private struct LoginView: View {
+    private enum AuthTab: String, CaseIterable {
+        case code = "验证码登录"
+        case password = "密码登录"
+        case register = "注册"
+    }
+
     @ObservedObject var session: AppSessionViewModel
-    @State private var email = ""
+    @State private var selectedTab: AuthTab = .code
+    @State private var phone = ""
+    @State private var code = ""
     @State private var password = ""
+    @State private var agreedToTerms = true
 
     var body: some View {
         ZStack {
@@ -518,75 +527,17 @@ private struct LoginView: View {
             VStack(spacing: 28) {
                 Spacer(minLength: 24)
 
-                VStack(spacing: 10) {
-                    Image(systemName: "moon.stars.fill")
-                        .font(.system(size: 44))
-                        .foregroundStyle(
-                            LinearGradient(colors: [.purple, .indigo], startPoint: .top, endPoint: .bottom)
-                        )
-
-                    Text("EchoClock")
-                        .font(.system(size: 30, weight: .light, design: .rounded))
-                        .tracking(5)
-                        .foregroundStyle(.white.opacity(0.92))
-
-                    Text("登录后管理你的智能唤醒计划")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.42))
-                }
+                brandHeader
 
                 VStack(spacing: 14) {
-                    authField(icon: "envelope.fill", placeholder: "邮箱", text: $email, isSecure: false)
-                    authField(icon: "lock.fill", placeholder: "密码", text: $password, isSecure: true)
+                    tabSelector
+                    formFields
+                    termsRow
+                    primaryButton
 
-                    Button {
-                        Task {
-                            await session.signIn(email: email, password: password)
-                        }
-                    } label: {
-                        Text(session.isLoading ? "处理中..." : "登录")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 18)
-                                    .fill(LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing))
-                            )
-                    }
-                    .disabled(session.isLoading)
-                    .padding(.top, 6)
-
-                    Button {
-                        Task {
-                            await session.register(email: email, password: password)
-                        }
-                    } label: {
-                        Text("注册")
-                            .font(.headline)
-                            .foregroundStyle(.white.opacity(0.82))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(.white.opacity(0.08))
-                            )
-                    }
-                    .disabled(session.isLoading)
-
-                    Button {
-                        session.demoSignIn()
-                    } label: {
-                        Text("演示登录")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.65))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(.white.opacity(0.06))
-                            )
-                    }
+                    divider
+                    wechatButton
+                    demoButton
 
                     if let message = session.authMessage {
                         Text(message)
@@ -605,7 +556,7 @@ private struct LoginView: View {
                         )
                 )
 
-                Text("账号系统已接入 EMAS Serverless，演示登录仅用于云函数未部署时预览")
+                Text("手机号验证码、密码登录与微信快捷登录已接入 EMAS Serverless 云函数")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.28))
                     .multilineTextAlignment(.center)
@@ -617,8 +568,195 @@ private struct LoginView: View {
         .preferredColorScheme(.dark)
     }
 
+    private var brandHeader: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "moon.stars.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(
+                    LinearGradient(colors: [.purple, .indigo], startPoint: .top, endPoint: .bottom)
+                )
+
+            Text("EchoClock")
+                .font(.system(size: 30, weight: .light, design: .rounded))
+                .tracking(5)
+                .foregroundStyle(.white.opacity(0.92))
+
+            Text("登录后管理你的智能唤醒计划")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.42))
+        }
+    }
+
+    private var tabSelector: some View {
+        HStack(spacing: 4) {
+            ForEach(AuthTab.allCases, id: \.self) { tab in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        selectedTab = tab
+                    }
+                } label: {
+                    Text(tab.rawValue)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(selectedTab == tab ? .white : .white.opacity(0.42))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(selectedTab == tab ? .white.opacity(0.12) : .clear)
+                        )
+                }
+            }
+        }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(.black.opacity(0.22))
+        )
+    }
+
+    private var formFields: some View {
+        VStack(spacing: 12) {
+            phoneField
+
+            if selectedTab == .code {
+                codeField
+            } else {
+                authField(icon: "lock.fill", placeholder: selectedTab == .register ? "设置密码（至少 6 位）" : "密码", text: $password, isSecure: true, keyboard: .default)
+            }
+        }
+    }
+
+    private var phoneField: some View {
+        authField(icon: "iphone", placeholder: "手机号", text: $phone, isSecure: false, keyboard: .numberPad)
+    }
+
+    private var codeField: some View {
+        HStack(spacing: 10) {
+            authField(icon: "number", placeholder: "验证码", text: $code, isSecure: false, keyboard: .numberPad)
+            Button {
+                Task {
+                    await session.sendSMSCode(phone: phone)
+                }
+            } label: {
+                Text(session.smsCountdown > 0 ? "\(session.smsCountdown)s" : "获取")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 72)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(.purple.opacity(session.smsCountdown > 0 ? 0.22 : 0.55))
+                    )
+            }
+            .disabled(session.smsCountdown > 0 || session.isLoading)
+        }
+    }
+
+    private var termsRow: some View {
+        Button {
+            agreedToTerms.toggle()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: agreedToTerms ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(agreedToTerms ? .purple.opacity(0.9) : .white.opacity(0.35))
+                Text("我已阅读并同意用户协议与隐私政策")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.42))
+                Spacer()
+            }
+        }
+    }
+
+    private var primaryButton: some View {
+        Button {
+            guard agreedToTerms else {
+                session.authMessage = "请先同意用户协议与隐私政策"
+                return
+            }
+            Task {
+                switch selectedTab {
+                case .code:
+                    await session.signInWithCode(phone: phone, code: code)
+                case .password:
+                    await session.signInWithPassword(phone: phone, password: password)
+                case .register:
+                    await session.registerWithPassword(phone: phone, password: password, code: code)
+                }
+            }
+        } label: {
+            Text(session.isLoading ? "处理中..." : primaryButtonTitle)
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing))
+                )
+        }
+        .disabled(session.isLoading)
+        .padding(.top, 4)
+    }
+
+    private var primaryButtonTitle: String {
+        switch selectedTab {
+        case .code: return "手机号登录"
+        case .password: return "密码登录"
+        case .register: return "注册并登录"
+        }
+    }
+
+    private var divider: some View {
+        HStack {
+            Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
+            Text("快捷登录")
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.32))
+            Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var wechatButton: some View {
+        Button {
+            guard agreedToTerms else {
+                session.authMessage = "请先同意用户协议与隐私政策"
+                return
+            }
+            Task {
+                await session.signInWithWeChat()
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "message.fill")
+                Text("微信快捷登录")
+                    .font(.subheadline.weight(.medium))
+            }
+            .foregroundStyle(.white.opacity(0.88))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(red: 0.08, green: 0.55, blue: 0.25).opacity(0.42))
+            )
+        }
+        .disabled(session.isLoading)
+    }
+
+    private var demoButton: some View {
+        Button {
+            session.demoSignIn()
+        } label: {
+            Text("演示登录")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.58))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+        }
+    }
+
     @ViewBuilder
-    private func authField(icon: String, placeholder: String, text: Binding<String>, isSecure: Bool) -> some View {
+    private func authField(icon: String, placeholder: String, text: Binding<String>, isSecure: Bool, keyboard: UIKeyboardType) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .foregroundStyle(.purple.opacity(0.7))
@@ -630,7 +768,7 @@ private struct LoginView: View {
             } else {
                 TextField(placeholder, text: text)
                     .textInputAutocapitalization(.never)
-                    .keyboardType(.emailAddress)
+                    .keyboardType(keyboard)
                     .autocorrectionDisabled()
             }
         }

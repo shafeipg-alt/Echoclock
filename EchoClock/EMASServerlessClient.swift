@@ -14,13 +14,17 @@ struct EMASConfig {
     static let endpoint = URL(string: "https://api.next.bspapp.com/client")!
     static let bundleId = "mika.sha.EchoClock"
 
-    static let loginFunctionTarget = "auth-login"
-    static let registerFunctionTarget = "auth-register"
+    static let phoneCodeLoginFunctionTarget = "auth-phone-code-login"
+    static let passwordLoginFunctionTarget = "auth-password-login"
+    static let passwordRegisterFunctionTarget = "auth-password-register"
+    static let wechatLoginFunctionTarget = "auth-wechat-login"
+    static let smsCodeFunctionTarget = "auth-send-sms-code"
 }
 
 struct EMASAuthUser: Codable, Equatable {
     var id: String?
     var email: String?
+    var phone: String?
     var displayName: String?
 }
 
@@ -30,8 +34,10 @@ struct EMASAuthSession: Codable, Equatable {
 }
 
 enum EMASAuthMode {
-    case login
-    case register
+    case phoneCodeLogin
+    case passwordLogin
+    case passwordRegister
+    case wechatLogin
 }
 
 enum EMASClientError: LocalizedError {
@@ -60,24 +66,104 @@ final class EMASServerlessClient {
         self.urlSession = urlSession
     }
 
-    func login(email: String, password: String) async throws -> EMASAuthSession {
-        try await authenticate(mode: .login, email: email, password: password)
+    func sendSMSCode(phone: String) async throws {
+        _ = try await invokeFunction(
+            target: EMASConfig.smsCodeFunctionTarget,
+            arguments: baseArguments([
+                "phone": phone
+            ])
+        )
     }
 
-    func register(email: String, password: String) async throws -> EMASAuthSession {
-        try await authenticate(mode: .register, email: email, password: password)
-    }
-
-    private func authenticate(mode: EMASAuthMode, email: String, password: String) async throws -> EMASAuthSession {
-        let target = mode == .login ? EMASConfig.loginFunctionTarget : EMASConfig.registerFunctionTarget
+    func loginWithCode(phone: String, code: String) async throws -> EMASAuthSession {
         let result = try await invokeFunction(
-            target: target,
-            arguments: [
+            target: EMASConfig.phoneCodeLoginFunctionTarget,
+            arguments: baseArguments([
+                "phone": phone,
+                "code": code
+            ])
+        )
+        return try parseAuthSession(from: result, fallbackPhone: phone)
+    }
+
+    func loginWithPassword(phone: String, password: String) async throws -> EMASAuthSession {
+        let result = try await invokeFunction(
+            target: EMASConfig.passwordLoginFunctionTarget,
+            arguments: baseArguments([
+                "phone": phone,
+                "password": password
+            ])
+        )
+        return try parseAuthSession(from: result, fallbackPhone: phone)
+    }
+
+    func registerWithPassword(phone: String, password: String, code: String?) async throws -> EMASAuthSession {
+        var arguments: [String: Any] = [
+            "phone": phone,
+            "password": password
+        ]
+        if let code, !code.isEmpty {
+            arguments["code"] = code
+        }
+
+        let result = try await invokeFunction(
+            target: EMASConfig.passwordRegisterFunctionTarget,
+            arguments: baseArguments(arguments)
+        )
+        return try parseAuthSession(from: result, fallbackPhone: phone)
+    }
+
+    func loginWithWeChat() async throws -> EMASAuthSession {
+        let result = try await invokeFunction(
+            target: EMASConfig.wechatLoginFunctionTarget,
+            arguments: baseArguments([
+                "provider": "wechat",
+                "message": "WeChat native SDK is not linked yet. Return a demo binding token or add WeChat SDK auth code here."
+            ])
+        )
+        return try parseAuthSession(from: result, fallbackPhone: nil)
+    }
+
+    private func baseArguments(_ arguments: [String: Any]) -> [String: Any] {
+        var merged = arguments
+        merged["bundleId"] = EMASConfig.bundleId
+        merged["platform"] = "ios"
+        return merged
+    }
+
+    private func authenticate(mode: EMASAuthMode, phone: String, password: String? = nil, code: String? = nil) async throws -> EMASAuthSession {
+        switch mode {
+        case .phoneCodeLogin:
+            return try await loginWithCode(phone: phone, code: code ?? "")
+        case .passwordLogin:
+            return try await loginWithPassword(phone: phone, password: password ?? "")
+        case .passwordRegister:
+            return try await registerWithPassword(phone: phone, password: password ?? "", code: code)
+        case .wechatLogin:
+            return try await loginWithWeChat()
+        }
+    }
+
+    @available(*, deprecated, message: "Use phone-based auth methods instead.")
+    func login(email: String, password: String) async throws -> EMASAuthSession {
+        let result = try await invokeFunction(
+            target: EMASConfig.passwordLoginFunctionTarget,
+            arguments: baseArguments([
                 "email": email,
                 "password": password,
-                "bundleId": EMASConfig.bundleId,
-                "platform": "ios"
-            ]
+            ])
+        )
+        return try parseAuthSession(from: result, fallbackEmail: email)
+    }
+
+    @available(*, deprecated, message: "Use phone-based auth methods instead.")
+    func register(email: String, password: String) async throws -> EMASAuthSession {
+        let result = try await invokeFunction(
+            target: EMASConfig.passwordRegisterFunctionTarget,
+            arguments: baseArguments([
+                "email": email,
+                "password": password,
+            ])
         )
         return try parseAuthSession(from: result, fallbackEmail: email)
     }
@@ -150,7 +236,7 @@ final class EMASServerlessClient {
         return String(data: data, encoding: .utf8) ?? "{}"
     }
 
-    private func parseAuthSession(from object: [String: Any], fallbackEmail: String) throws -> EMASAuthSession {
+    private func parseAuthSession(from object: [String: Any], fallbackEmail: String? = nil, fallbackPhone: String? = nil) throws -> EMASAuthSession {
         let candidates = [
             object,
             object["result"] as? [String: Any],
@@ -170,6 +256,7 @@ final class EMASServerlessClient {
             let user = EMASAuthUser(
                 id: userObject["id"] as? String ?? userObject["userId"] as? String ?? userObject["uid"] as? String,
                 email: userObject["email"] as? String ?? fallbackEmail,
+                phone: userObject["phone"] as? String ?? userObject["mobile"] as? String ?? fallbackPhone,
                 displayName: userObject["displayName"] as? String ?? userObject["nickname"] as? String
             )
             return EMASAuthSession(token: token, user: user)
