@@ -10,9 +10,16 @@ import SwiftUI
 // MARK: - iPhone 主界面
 
 struct ContentView: View {
+    private enum DashboardTab {
+        case alarm
+        case device
+        case profile
+    }
+
     @StateObject private var session = AppSessionViewModel()
     @StateObject private var viewModel = AlarmViewModel()
     @State private var showRangePicker = false
+    @State private var selectedDashboardTab: DashboardTab = .alarm
 
     var body: some View {
         Group {
@@ -26,46 +33,25 @@ struct ContentView: View {
 
     private var dashboard: some View {
         ZStack {
-            // 背景渐变
-            LinearGradient(
-                colors: [
-                    Color(red: 0.05, green: 0.05, blue: 0.08),
-                    Color(red: 0.10, green: 0.08, blue: 0.14),
-                    Color(red: 0.06, green: 0.06, blue: 0.10)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            appBackground
 
-            // 装饰性光晕
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Color.purple.opacity(0.15), Color.clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 200
-                    )
-                )
-                .frame(width: 400, height: 400)
-                .offset(x: -80, y: -200)
-                .blur(radius: 60)
+            TabView(selection: $selectedDashboardTab) {
+                alarmHomePage
+                    .tabItem { Label("闹钟", systemImage: "alarm.fill") }
+                    .tag(DashboardTab.alarm)
 
-            ScrollView {
-                VStack(spacing: 32) {
-                    headerSection
-                    clockSection
-                    wakeRangeSection
-                    soundSection
-                    monitoringActionSection
-                    statusSection
-                }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 40)
+                devicePage
+                    .tabItem { Label("设备", systemImage: "applewatch") }
+                    .tag(DashboardTab.device)
+
+                profilePage
+                    .tabItem { Label("我的", systemImage: "person.crop.circle") }
+                    .tag(DashboardTab.profile)
             }
+            .tint(.purple)
+            .toolbarBackground(Color(red: 0.05, green: 0.05, blue: 0.08), for: .tabBar)
+            .toolbarBackground(.visible, for: .tabBar)
 
-            // 响铃全屏遮罩
             if viewModel.isAlarmRinging {
                 ringingOverlay
             }
@@ -77,6 +63,64 @@ struct ContentView: View {
         .sheet(isPresented: $showRangePicker) {
             rangePickerSheet
         }
+    }
+
+    private var appBackground: some View {
+        LinearGradient(
+            colors: [
+                Color(red: 0.05, green: 0.05, blue: 0.08),
+                Color(red: 0.10, green: 0.08, blue: 0.14),
+                Color(red: 0.06, green: 0.06, blue: 0.10)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
+    }
+
+    private var alarmHomePage: some View {
+        ScrollView {
+            VStack(spacing: 18) {
+                headerSection
+                smartAlarmHero
+                compactSettingsSection
+                smartSignalSection
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 28)
+            .padding(.bottom, 28)
+        }
+        .scrollIndicators(.hidden)
+        .background(appBackground)
+    }
+
+    private var devicePage: some View {
+        ScrollView {
+            VStack(spacing: 18) {
+                pageTitle("设备", subtitle: "Apple Watch 与 HealthKit")
+                deviceSummaryCard
+                compactStatusList
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 28)
+            .padding(.bottom, 28)
+        }
+        .scrollIndicators(.hidden)
+        .background(appBackground)
+    }
+
+    private var profilePage: some View {
+        ScrollView {
+            VStack(spacing: 18) {
+                pageTitle("我的", subtitle: session.displayName)
+                profileCard
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 28)
+            .padding(.bottom, 28)
+        }
+        .scrollIndicators(.hidden)
+        .background(appBackground)
     }
 
     // MARK: - 顶部标题
@@ -114,6 +158,283 @@ struct ContentView: View {
             }
             .accessibilityLabel("退出登录")
         }
+    }
+
+    private func pageTitle(_ title: String, subtitle: String) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.42))
+            }
+            Spacer()
+        }
+    }
+
+    private var smartAlarmHero: some View {
+        VStack(spacing: 18) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(viewModel.alarm.isOn ? "智能监测中" : "今晚的智能闹钟")
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.88))
+                    Text(viewModel.alarm.formattedWakeWindow)
+                        .font(.system(size: 42, weight: .light, design: .rounded))
+                        .foregroundStyle(.white)
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.72)
+                }
+
+                Spacer()
+
+                ZStack {
+                    Circle()
+                        .fill(viewModel.alarm.isOn ? .green.opacity(0.18) : .purple.opacity(0.16))
+                        .frame(width: 66, height: 66)
+                    Image(systemName: viewModel.alarm.isOn ? "waveform.path.ecg" : "alarm.fill")
+                        .font(.title2)
+                        .foregroundStyle(viewModel.alarm.isOn ? .green.opacity(0.92) : .purple.opacity(0.9))
+                }
+            }
+
+            HStack(spacing: 10) {
+                intelligencePill(icon: "heart.fill", title: heartRateText, subtitle: "实时心率")
+                intelligencePill(icon: "moon.zzz.fill", title: wakeDecisionText, subtitle: "唤醒策略")
+            }
+
+            Button {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
+                    viewModel.toggleAlarm()
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: viewModel.alarm.isOn ? "stop.fill" : "play.fill")
+                    Text(viewModel.alarm.isOn ? "停止监测" : "开启智能闹钟")
+                        .font(.headline)
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 17)
+                .background(
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(
+                            viewModel.alarm.isOn
+                            ? LinearGradient(colors: [.red.opacity(0.82), .orange.opacity(0.72)], startPoint: .leading, endPoint: .trailing)
+                            : LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing)
+                        )
+                )
+            }
+
+            Text(viewModel.alarm.isOn ? viewModel.monitoringStatus : "到点前自动分析浅睡眠，未命中则按截止时间唤醒")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.42))
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 22)
+                .fill(.white.opacity(0.055))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22)
+                        .stroke(.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private var wakeDecisionText: String {
+        if viewModel.isAlarmRinging { return "已唤醒" }
+        if viewModel.alarm.isOn { return "浅睡优先" }
+        return "待开启"
+    }
+
+    private func intelligencePill(icon: String, title: String, subtitle: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundStyle(.purple.opacity(0.82))
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(.white.opacity(0.08)))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.88))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.36))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(.black.opacity(0.18))
+        )
+    }
+
+    private var compactSettingsSection: some View {
+        VStack(spacing: 12) {
+            Button {
+                showRangePicker = true
+            } label: {
+                compactSettingRow(icon: "clock.badge.checkmark.fill", title: "唤醒范围", value: viewModel.alarm.formattedWakeWindow)
+            }
+
+            Menu {
+                ForEach(AlarmSound.allCases, id: \.self) { sound in
+                    Button {
+                        viewModel.updateSound(sound)
+                    } label: {
+                        Label(sound.displayName, systemImage: sound == viewModel.alarm.sound ? "checkmark" : "music.note")
+                    }
+                }
+            } label: {
+                compactSettingRow(icon: "speaker.wave.2.fill", title: "铃声", value: viewModel.alarm.sound.displayName)
+            }
+        }
+    }
+
+    private func compactSettingRow(icon: String, title: String, value: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(.white.opacity(0.78))
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(.white.opacity(0.08)))
+
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.58))
+            Spacer()
+            Text(value)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white.opacity(0.9))
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.28))
+        }
+        .padding(15)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.white.opacity(0.04))
+        )
+    }
+
+    private var smartSignalSection: some View {
+        HStack(spacing: 10) {
+            monitorStep(icon: "applewatch", text: shortWatchStatus, isActive: isWatchReady)
+            monitorStep(icon: "heart.fill", text: viewModel.latestHeartRate > 0 ? "心率已同步" : "等待心率", isActive: viewModel.latestHeartRate > 0)
+            monitorStep(icon: "bell.fill", text: viewModel.alarm.isOn ? "闹钟已开" : "未开启", isActive: viewModel.alarm.isOn)
+        }
+    }
+
+    private var shortWatchStatus: String {
+        viewModel.watchStatus.contains("已连接") ? "Watch 已连" : "连接 Watch"
+    }
+
+    private var isWatchReady: Bool {
+        viewModel.watchStatus.contains("已连接") || viewModel.wearableSignalStatus.contains("收到") || viewModel.wearableSignalStatus.contains("响应")
+    }
+
+    private var deviceSummaryCard: some View {
+        VStack(spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(shortWatchStatus)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                    Text(viewModel.wearableSignalStatus)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.42))
+                        .lineLimit(1)
+                }
+                Spacer()
+                Button {
+                    viewModel.connectWearable()
+                } label: {
+                    Label("连接", systemImage: "applewatch.and.arrow.forward")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(.purple.opacity(0.42)))
+                }
+            }
+
+            HStack(spacing: 10) {
+                intelligencePill(icon: "heart.text.square.fill", title: heartRateText, subtitle: "心率")
+                intelligencePill(icon: "sensor.tag.radiowaves.forward.fill", title: viewModel.heartRateSourceStatus, subtitle: "来源")
+            }
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.white.opacity(0.05))
+        )
+    }
+
+    private var compactStatusList: some View {
+        VStack(spacing: 12) {
+            statusRow(icon: "heart.fill", label: "HealthKit", value: viewModel.healthAuthStatus)
+            statusRow(icon: "applewatch", label: "Apple Watch", value: viewModel.watchStatus)
+            statusRow(icon: "waveform.path.ecg", label: "监测状态", value: viewModel.monitoringStatus)
+            statusRow(icon: "checkmark.seal.fill", label: "最近判定", value: viewModel.triggerReasonStatus)
+            if HealthKitManager.shared.isUsingMockData {
+                statusRow(icon: "waveform.path.ecg", label: "心率模式", value: "模拟数据")
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.white.opacity(0.035))
+        )
+    }
+
+    private var profileCard: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 12) {
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.white.opacity(0.72))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(session.displayName)
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.9))
+                    Text("智能闹钟账户")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.38))
+                }
+                Spacer()
+            }
+
+            Button {
+                session.signOut()
+            } label: {
+                Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.86))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(.white.opacity(0.07))
+                    )
+            }
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(.white.opacity(0.045))
+        )
     }
 
     // MARK: - 实时时钟
