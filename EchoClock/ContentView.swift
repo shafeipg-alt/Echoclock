@@ -7,12 +7,25 @@
 
 import SwiftUI
 
+private enum LumeColor {
+    static let background = Color(red: 0.055, green: 0.075, blue: 0.133)
+    static let surfaceLowest = Color(red: 0.035, green: 0.055, blue: 0.11)
+    static let surfaceLow = Color(red: 0.086, green: 0.106, blue: 0.169)
+    static let surfaceHigh = Color(red: 0.145, green: 0.161, blue: 0.227)
+    static let text = Color(red: 0.871, green: 0.882, blue: 0.969)
+    static let textMuted = Color(red: 0.725, green: 0.796, blue: 0.741)
+    static let primary = Color(red: 0.0, green: 0.89, blue: 0.58)
+    static let primaryBright = Color(red: 0.31, green: 1.0, blue: 0.69)
+    static let secondary = Color(red: 0.0, green: 0.85, blue: 1.0)
+}
+
 // MARK: - iPhone 主界面
 
 struct ContentView: View {
     private enum DashboardTab {
         case alarm
-        case device
+        case sleep
+        case stats
         case profile
     }
 
@@ -51,22 +64,44 @@ struct ContentView: View {
         ZStack {
             appBackground
 
-            TabView(selection: $selectedDashboardTab) {
-                alarmHomePage
-                    .tabItem { Label("闹钟", systemImage: "alarm.fill") }
-                    .tag(DashboardTab.alarm)
-
-                devicePage
-                    .tabItem { Label("设备", systemImage: "applewatch") }
-                    .tag(DashboardTab.device)
-
-                profilePage
-                    .tabItem { Label("我的", systemImage: "person.crop.circle") }
-                    .tag(DashboardTab.profile)
+            Group {
+                switch selectedDashboardTab {
+                case .alarm:
+                    alarmHomePage
+                case .sleep:
+                    sleepMonitorPage
+                case .stats:
+                    statsPage
+                case .profile:
+                    profilePage
+                }
             }
-            .tint(.green)
-            .toolbarBackground(Color(red: 0.05, green: 0.05, blue: 0.08), for: .tabBar)
-            .toolbarBackground(.visible, for: .tabBar)
+
+            VStack {
+                Spacer()
+                bottomNavigationBar
+            }
+
+            if selectedDashboardTab == .alarm {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button {
+                            showRangePicker = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(LumeColor.background)
+                                .frame(width: 56, height: 56)
+                                .background(Circle().fill(LumeColor.primary))
+                                .shadow(color: LumeColor.primary.opacity(0.38), radius: 24, y: 8)
+                        }
+                        .padding(.trailing, 24)
+                        .padding(.bottom, 94)
+                    }
+                }
+            }
 
             if viewModel.isAlarmRinging {
                 ringingOverlay
@@ -82,29 +117,26 @@ struct ContentView: View {
     }
 
     private var appBackground: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.05, green: 0.05, blue: 0.08),
-                Color(red: 0.10, green: 0.08, blue: 0.14),
-                Color(red: 0.06, green: 0.06, blue: 0.10)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        ZStack {
+            LumeColor.background
+            LinearGradient(colors: [LumeColor.primary.opacity(0.18), .clear, .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
+            LinearGradient(colors: [.clear, LumeColor.secondary.opacity(0.14), .clear], startPoint: .topTrailing, endPoint: .bottomLeading)
+        }
         .ignoresSafeArea()
     }
 
     private var alarmHomePage: some View {
         ScrollView {
             VStack(spacing: 16) {
-                alarmTopBar
-                smartAlarmHero
-                compactSettingsSection
-                smartSignalSection
+                lumeTopBar
+                pageTitle("闹钟", subtitle: "专注恢复，活力每一天")
+                smartAlarmListCard
+                regularAlarmCard
+                sleepBentoGrid
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 28)
-            .padding(.bottom, 28)
+            .padding(.horizontal, 24)
+            .padding(.top, 20)
+            .padding(.bottom, 122)
         }
         .scrollIndicators(.hidden)
         .background(appBackground)
@@ -134,6 +166,534 @@ struct ContentView: View {
         }
     }
 
+    private var lumeTopBar: some View {
+        HStack {
+            Button {
+                selectedDashboardTab = .profile
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.subheadline)
+                    .foregroundStyle(LumeColor.textMuted)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(.white.opacity(0.05)))
+            }
+
+            Spacer()
+
+            HStack(spacing: 6) {
+                Image(systemName: "sensor.tag.radiowaves.forward.fill")
+                    .font(.caption2)
+                    .foregroundStyle(LumeColor.primary)
+                Text(isWatchReady ? "Connected" : "Waiting")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(LumeColor.textMuted)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(.white.opacity(0.055)))
+        }
+        .padding(.bottom, 10)
+    }
+
+    private var smartAlarmListCard: some View {
+        VStack(spacing: 15) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(viewModel.alarm.formattedWakeEndTime)
+                            .font(.system(size: 42, weight: .bold, design: .rounded))
+                            .foregroundStyle(LumeColor.text)
+                            .monospacedDigit()
+                        Text("AM")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(LumeColor.textMuted)
+                    }
+
+                    Text("智能唤醒: \(viewModel.alarm.formattedWakeWindow)")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(LumeColor.primaryBright)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(LumeColor.primary.opacity(0.16)))
+                }
+
+                Spacer()
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        viewModel.toggleAlarm()
+                    }
+                } label: {
+                    toggleSwitch(isOn: viewModel.alarm.isOn)
+                }
+                .accessibilityLabel(viewModel.alarm.isOn ? "关闭智能闹钟" : "开启智能闹钟")
+            }
+
+            HStack {
+                Text("每天")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(viewModel.alarm.isOn ? LumeColor.primary : LumeColor.textMuted)
+                Spacer()
+                Text(viewModel.alarm.isOn ? viewModel.monitoringStatus : "点击开启，自动同步 Apple Watch")
+                    .font(.caption2)
+                    .foregroundStyle(LumeColor.textMuted.opacity(0.72))
+                    .lineLimit(1)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(LumeColor.textMuted.opacity(0.45))
+            }
+        }
+        .padding(24)
+        .opacity(viewModel.alarm.isOn ? 1 : 0.58)
+        .glassCard(cornerRadius: 28)
+    }
+
+    private var regularAlarmCard: some View {
+        VStack(spacing: 15) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("08:15")
+                            .font(.system(size: 42, weight: .bold, design: .rounded))
+                            .foregroundStyle(LumeColor.text.opacity(0.86))
+                            .monospacedDigit()
+                        Text("AM")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(LumeColor.textMuted)
+                    }
+                    Text("常规闹钟")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(LumeColor.textMuted)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(LumeColor.surfaceHigh.opacity(0.55)))
+                }
+                Spacer()
+                toggleSwitch(isOn: false)
+            }
+
+            HStack {
+                Text("周一 至 周五")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(LumeColor.textMuted)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(LumeColor.textMuted.opacity(0.45))
+            }
+        }
+        .padding(24)
+        .opacity(0.58)
+        .glassCard(cornerRadius: 28)
+    }
+
+    private func toggleSwitch(isOn: Bool) -> some View {
+        ZStack(alignment: isOn ? .trailing : .leading) {
+            Capsule()
+                .fill(
+                    isOn
+                    ? LinearGradient(colors: [LumeColor.primary, LumeColor.secondary], startPoint: .leading, endPoint: .trailing)
+                    : LinearGradient(colors: [LumeColor.surfaceHigh.opacity(0.8), LumeColor.surfaceHigh.opacity(0.8)], startPoint: .leading, endPoint: .trailing)
+                )
+                .frame(width: 50, height: 28)
+            Circle()
+                .fill(.white)
+                .frame(width: 22, height: 22)
+                .padding(3)
+                .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+        }
+        .frame(width: 50, height: 28)
+    }
+
+    private var sleepBentoGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+            bentoMetricCard(icon: "moon.zzz.fill", title: "睡眠效率", value: "94", suffix: "%", accent: LumeColor.secondary, progress: 0.94)
+            heartRateBentoCard
+        }
+        .padding(.top, 12)
+    }
+
+    private func bentoMetricCard(icon: String, title: String, value: String, suffix: String, accent: Color, progress: Double) -> some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundStyle(accent)
+                Spacer()
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(LumeColor.textMuted)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text(value)
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(LumeColor.text)
+                    Text(suffix)
+                        .font(.caption)
+                        .foregroundStyle(LumeColor.textMuted)
+                }
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(LumeColor.surfaceHigh.opacity(0.55))
+                        Capsule()
+                            .fill(accent)
+                            .frame(width: proxy.size.width * progress)
+                    }
+                }
+                .frame(height: 6)
+            }
+        }
+        .frame(height: 126)
+        .padding(18)
+        .glassCard(cornerRadius: 24)
+    }
+
+    private var heartRateBentoCard: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            HStack {
+                Image(systemName: "heart.fill")
+                    .foregroundStyle(.red.opacity(0.86))
+                Spacer()
+                Text("心率")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(LumeColor.textMuted)
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(viewModel.latestHeartRate > 0 ? "\(Int(viewModel.latestHeartRate))" : "62")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(LumeColor.text)
+                Text("BPM")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(LumeColor.textMuted)
+            }
+
+            ECGLine()
+                .stroke(LumeColor.primary, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                .opacity(0.45)
+                .frame(height: 34)
+        }
+        .frame(height: 126)
+        .padding(18)
+        .glassCard(cornerRadius: 24)
+    }
+
+    private var sleepMonitorPage: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                lumeTopBar
+                VStack(spacing: 9) {
+                    Text(viewModel.currentTime, format: .dateTime.hour().minute())
+                        .font(.system(size: 78, weight: .bold, design: .rounded))
+                        .foregroundStyle(LumeColor.primaryBright)
+                        .monospacedDigit()
+                        .shadow(color: LumeColor.primary.opacity(0.32), radius: 24)
+                    Label(viewModel.alarm.isOn ? "正在监测您的睡眠阶段..." : "开启闹钟后开始监测", systemImage: "sparkles")
+                        .font(.subheadline)
+                        .foregroundStyle(LumeColor.textMuted)
+                }
+                .padding(.top, 44)
+
+                monitoringHeartRateCard
+                environmentGrid
+
+                Button {
+                    if viewModel.alarm.isOn {
+                        viewModel.toggleAlarm()
+                    } else {
+                        selectedDashboardTab = .alarm
+                    }
+                } label: {
+                    Label(viewModel.alarm.isOn ? "停止监测" : "去开启闹钟", systemImage: viewModel.alarm.isOn ? "stop.circle.fill" : "alarm.fill")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(LumeColor.text)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
+                        .glassCard(cornerRadius: 30)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 20)
+            .padding(.bottom, 122)
+        }
+        .scrollIndicators(.hidden)
+        .background(appBackground)
+    }
+
+    private var monitoringHeartRateCard: some View {
+        VStack(spacing: 14) {
+            HStack {
+                Label("心率", systemImage: "heart.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(LumeColor.textMuted)
+                Spacer()
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(viewModel.latestHeartRate > 0 ? "\(Int(viewModel.latestHeartRate))" : "57")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(LumeColor.primaryBright)
+                    Text("BPM")
+                        .font(.caption2)
+                        .foregroundStyle(LumeColor.textMuted)
+                }
+            }
+
+            ECGLine()
+                .stroke(
+                    LinearGradient(colors: [LumeColor.secondary.opacity(0.2), LumeColor.primary, LumeColor.primary], startPoint: .leading, endPoint: .trailing),
+                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
+                )
+                .frame(height: 86)
+
+            HStack {
+                metricColumn(title: "状态", value: viewModel.alarm.isOn ? sleepStageText : "待机中", valueColor: LumeColor.primary)
+                Spacer()
+                metricColumn(title: "呼吸频率", value: "14 次/分", valueColor: LumeColor.secondary)
+            }
+        }
+        .padding(22)
+        .glassCard(cornerRadius: 28)
+    }
+
+    private var sleepStageText: String {
+        viewModel.latestHeartRate > 0 && viewModel.latestHeartRate <= 72 ? "浅睡候选" : "深度睡眠期"
+    }
+
+    private var environmentGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+            smallEnvironmentCard(icon: "thermometer.medium", title: "室温", value: "22.5°C", accent: LumeColor.secondary)
+            smallEnvironmentCard(icon: "speaker.wave.1.fill", title: "环境音", value: "32 dB", accent: LumeColor.primary)
+        }
+    }
+
+    private func smallEnvironmentCard(icon: String, title: String, value: String, accent: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(accent)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(accent.opacity(0.14)))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(LumeColor.textMuted)
+                Text(value)
+                    .font(.headline)
+                    .foregroundStyle(LumeColor.text)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .glassCard(cornerRadius: 22)
+    }
+
+    private var statsPage: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                pageTitle("昨晚睡眠报告", subtitle: "智能唤醒发生在浅睡窗口")
+                sleepScoreCard
+                sleepMetricGrid
+                sleepStageChartCard
+                heartRateTrendCard
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 122)
+        }
+        .scrollIndicators(.hidden)
+        .background(appBackground)
+    }
+
+    private var sleepScoreCard: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .stroke(.white.opacity(0.06), lineWidth: 9)
+                    .frame(width: 168, height: 168)
+                Circle()
+                    .trim(from: 0, to: 0.88)
+                    .stroke(LumeColor.primary, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .frame(width: 168, height: 168)
+                    .rotationEffect(.degrees(-90))
+                    .shadow(color: LumeColor.primary.opacity(0.45), radius: 10)
+                VStack(spacing: 3) {
+                    Text("睡眠分数")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(LumeColor.textMuted)
+                    Text("88")
+                        .font(.system(size: 70, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+            }
+            Text("睡眠质量优秀")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(LumeColor.primaryBright)
+            Text("深睡比例超过同龄人平均水平，继续保持规律作息。")
+                .font(.subheadline)
+                .foregroundStyle(LumeColor.textMuted)
+                .multilineTextAlignment(.center)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
+        .glassCard(cornerRadius: 28)
+    }
+
+    private var sleepMetricGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            compactMetric(title: "入睡时间", value: "23:15")
+            compactMetric(title: "醒来时间", value: viewModel.alarm.formattedWakeEndTime)
+            compactMetric(title: "深睡时长", value: "2.5h")
+        }
+    }
+
+    private func compactMetric(title: String, value: String) -> some View {
+        VStack(spacing: 6) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(LumeColor.textMuted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text(value)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(LumeColor.text)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity)
+        .glassCard(cornerRadius: 20)
+    }
+
+    private var sleepStageChartCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("睡眠分期")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                Spacer()
+                legendDot(color: LumeColor.primary, text: "深睡")
+                legendDot(color: LumeColor.secondary, text: "浅睡")
+            }
+            HStack(alignment: .bottom, spacing: 5) {
+                ForEach(Array([0.60, 0.55, 0.80, 0.85, 0.40, 0.30, 0.90, 0.10, 0.75, 0.50, 0.95, 1.00].enumerated()), id: \.offset) { item in
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(item.offset == 7 ? Color.red.opacity(0.22) : (item.offset % 3 == 0 ? LumeColor.primary.opacity(0.42) : LumeColor.secondary.opacity(0.22)))
+                        .frame(height: 150 * item.element)
+                        .overlay(alignment: .top) {
+                            if item.offset == 10 {
+                                VStack(spacing: 3) {
+                                    Text("智能唤醒")
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .foregroundStyle(LumeColor.background)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(Capsule().fill(LumeColor.primaryBright))
+                                    Rectangle()
+                                        .fill(LumeColor.primaryBright)
+                                        .frame(width: 1, height: 34)
+                                }
+                                .offset(y: -48)
+                            }
+                        }
+                }
+            }
+            HStack {
+                Text("23:00")
+                Spacer()
+                Text("02:00")
+                Spacer()
+                Text("05:00")
+                Spacer()
+                Text("08:00")
+            }
+            .font(.caption2)
+            .foregroundStyle(LumeColor.textMuted)
+        }
+        .padding(20)
+        .glassCard(cornerRadius: 24)
+    }
+
+    private func legendDot(color: Color, text: String) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 7, height: 7)
+            Text(text)
+                .font(.caption2)
+                .foregroundStyle(LumeColor.textMuted)
+        }
+    }
+
+    private var heartRateTrendCard: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Label("静息心率", systemImage: "heart.fill")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                Spacer()
+                Text(viewModel.latestHeartRate > 0 ? "\(Int(viewModel.latestHeartRate)) BPM" : "58 BPM")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+            }
+            ECGLine()
+                .stroke(LinearGradient(colors: [LumeColor.secondary, LumeColor.primary], startPoint: .leading, endPoint: .trailing), style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                .frame(height: 90)
+        }
+        .padding(20)
+        .glassCard(cornerRadius: 24)
+    }
+
+    private var bottomNavigationBar: some View {
+        HStack {
+            navButton(.alarm, icon: "alarm.fill", title: "闹钟")
+            navButton(.sleep, icon: "moon.zzz.fill", title: "睡眠")
+            navButton(.stats, icon: "chart.bar.fill", title: "统计")
+            navButton(.profile, icon: "person.fill", title: "我的")
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 18)
+        .background(
+            Rectangle()
+                .fill(LumeColor.surfaceLowest.opacity(0.72))
+                .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.08)).frame(height: 1) }
+                .ignoresSafeArea(edges: .bottom)
+        )
+    }
+
+    private func navButton(_ tab: DashboardTab, icon: String, title: String) -> some View {
+        let isActive = selectedDashboardTab == tab
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedDashboardTab = tab
+            }
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.headline)
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .foregroundStyle(isActive ? LumeColor.primary : LumeColor.textMuted.opacity(0.62))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(isActive ? .white.opacity(0.055) : .clear)
+            )
+            .shadow(color: isActive ? LumeColor.primary.opacity(0.28) : .clear, radius: 8)
+        }
+    }
+
+    private func metricColumn(title: String, value: String, valueColor: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(LumeColor.textMuted.opacity(0.62))
+            Text(value)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(valueColor)
+        }
+    }
+
     private var devicePage: some View {
         ScrollView {
             VStack(spacing: 18) {
@@ -152,15 +712,141 @@ struct ContentView: View {
     private var profilePage: some View {
         ScrollView {
             VStack(spacing: 18) {
-                pageTitle("我的", subtitle: session.displayName)
-                profileCard
+                HStack {
+                    Label("My", systemImage: "person.crop.circle")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(LumeColor.text)
+                    Spacer()
+                    Image(systemName: "gearshape")
+                        .foregroundStyle(LumeColor.text)
+                        .frame(width: 40, height: 40)
+                        .glassCard(cornerRadius: 20)
+                }
+                profileHeroSection
+                profileStatsGrid
+                profileMenuList
+                Button {
+                    session.signOut()
+                } label: {
+                    Text("退出登录")
+                        .font(.headline)
+                        .foregroundStyle(.red.opacity(0.82))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 18)
+                        .glassCard(cornerRadius: 20)
+                }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 28)
-            .padding(.bottom, 28)
+            .padding(.horizontal, 24)
+            .padding(.top, 20)
+            .padding(.bottom, 122)
         }
         .scrollIndicators(.hidden)
         .background(appBackground)
+    }
+
+    private var profileHeroSection: some View {
+        VStack(spacing: 10) {
+            ZStack(alignment: .bottomTrailing) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [LumeColor.primary, LumeColor.secondary], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 98, height: 98)
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.system(size: 84))
+                        .foregroundStyle(LumeColor.background)
+                }
+                Text("Pro")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(LumeColor.background)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(LumeColor.primary))
+                    .offset(x: 6, y: -2)
+            }
+            Text(session.displayName.isEmpty ? "极光探险者" : session.displayName)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(LumeColor.text)
+            Text("Lume Premium Member")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(LumeColor.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+    }
+
+    private var profileStatsGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+            profileStatCard(title: "累计睡眠", value: "1,248", suffix: "小时", accent: LumeColor.primary, isWide: true)
+            profileStatCard(title: "早起天数", value: "156", suffix: "天", accent: LumeColor.secondary)
+            profileStatCard(title: "心率达标", value: "98", suffix: "%", accent: LumeColor.primary)
+        }
+    }
+
+    private func profileStatCard(title: String, value: String, suffix: String, accent: Color, isWide: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(LumeColor.textMuted)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(value)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(accent)
+                Text(suffix)
+                    .font(.caption)
+                    .foregroundStyle(LumeColor.textMuted)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .glassCard(cornerRadius: 22)
+        .gridCellColumns(isWide ? 2 : 1)
+    }
+
+    private var profileMenuList: some View {
+        VStack(spacing: 0) {
+            profileMenuRow(icon: "applewatch", title: "我的设备", value: shortWatchStatus, accent: LumeColor.primary)
+            dividerLine
+            profileMenuRow(icon: "bell.badge.fill", title: "睡眠提醒", value: viewModel.alarm.isOn ? "已开启" : "未开启", accent: LumeColor.secondary)
+            dividerLine
+            profileMenuRow(icon: "globe", title: "界面语言", value: "中文", accent: LumeColor.primary)
+            dividerLine
+            profileMenuRow(icon: "paintpalette.fill", title: "主题切换", value: "极光深色", accent: LumeColor.secondary)
+            dividerLine
+            profileMenuRow(icon: "music.note.list", title: "闹钟铃声库", value: viewModel.alarm.sound.displayName, accent: Color(red: 0.82, green: 0.74, blue: 1.0))
+            dividerLine
+            profileMenuRow(icon: "heart.text.square.fill", title: "心率监测设置", value: viewModel.healthAuthStatus, accent: LumeColor.primary)
+        }
+        .glassCard(cornerRadius: 24)
+    }
+
+    private func profileMenuRow(icon: String, title: String, value: String, accent: Color) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .foregroundStyle(accent)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(accent.opacity(0.12)))
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(LumeColor.text)
+            Spacer()
+            Text(value)
+                .font(.caption)
+                .foregroundStyle(LumeColor.textMuted.opacity(0.72))
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(LumeColor.textMuted.opacity(0.5))
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+    }
+
+    private var dividerLine: some View {
+        Rectangle()
+            .fill(.white.opacity(0.055))
+            .frame(height: 1)
+            .padding(.horizontal, 18)
     }
 
     // MARK: - 顶部标题
@@ -864,6 +1550,63 @@ struct ContentView: View {
     }
 }
 
+private struct GlassCardModifier: ViewModifier {
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(.white.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.15), .white.opacity(0.04)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+                    .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
+            )
+    }
+}
+
+private extension View {
+    func glassCard(cornerRadius: CGFloat = 24) -> some View {
+        modifier(GlassCardModifier(cornerRadius: cornerRadius))
+    }
+}
+
+private struct ECGLine: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let points: [CGPoint] = [
+            CGPoint(x: 0.00, y: 0.58),
+            CGPoint(x: 0.12, y: 0.58),
+            CGPoint(x: 0.18, y: 0.40),
+            CGPoint(x: 0.23, y: 0.78),
+            CGPoint(x: 0.28, y: 0.14),
+            CGPoint(x: 0.34, y: 0.58),
+            CGPoint(x: 0.50, y: 0.58),
+            CGPoint(x: 0.56, y: 0.42),
+            CGPoint(x: 0.61, y: 0.78),
+            CGPoint(x: 0.66, y: 0.12),
+            CGPoint(x: 0.72, y: 0.58),
+            CGPoint(x: 1.00, y: 0.58)
+        ]
+
+        guard let first = points.first else { return path }
+        path.move(to: CGPoint(x: rect.minX + first.x * rect.width, y: rect.minY + first.y * rect.height))
+        for point in points.dropFirst() {
+            path.addLine(to: CGPoint(x: rect.minX + point.x * rect.width, y: rect.minY + point.y * rect.height))
+        }
+        return path
+    }
+}
+
 // MARK: - App 启动页
 
 private struct AppLaunchView: View {
@@ -910,8 +1653,8 @@ private struct AppLaunchView: View {
 
 private struct LoginView: View {
     private enum AuthTab: String, CaseIterable {
+        case password = "手机号登录"
         case code = "验证码登录"
-        case password = "密码登录"
         case register = "注册"
     }
 
@@ -924,23 +1667,17 @@ private struct LoginView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.05, green: 0.05, blue: 0.08),
-                    Color(red: 0.10, green: 0.08, blue: 0.14),
-                    Color(red: 0.06, green: 0.06, blue: 0.10)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            LumeColor.background.ignoresSafeArea()
+            LinearGradient(colors: [LumeColor.primary.opacity(0.26), .clear, .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
+                .ignoresSafeArea()
+            LinearGradient(colors: [.clear, LumeColor.secondary.opacity(0.22), .clear], startPoint: .topTrailing, endPoint: .bottomLeading)
+                .ignoresSafeArea()
 
-            VStack(spacing: 24) {
+            VStack(spacing: 28) {
                 brandHeader
-                    .padding(.top, 52)
+                    .padding(.top, 70)
 
                 VStack(spacing: 14) {
-                    panelTitle
                     tabSelector
                     formFields
                     primaryButton
@@ -955,14 +1692,7 @@ private struct LoginView: View {
                     }
                 }
                 .padding(22)
-                .background(
-                    RoundedRectangle(cornerRadius: 22)
-                        .fill(.white.opacity(0.055))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22)
-                                .stroke(.white.opacity(0.08), lineWidth: 1)
-                        )
-                )
+                .glassCard(cornerRadius: 28)
 
                 Spacer(minLength: 24)
             }
@@ -972,31 +1702,13 @@ private struct LoginView: View {
     }
 
     private var brandHeader: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Image(systemName: "moon.stars.fill")
-                    .font(.system(size: 28))
-                    .foregroundStyle(
-                        LinearGradient(colors: [.purple, .indigo], startPoint: .top, endPoint: .bottom)
-                    )
-                    .frame(width: 48, height: 48)
-                    .background(Circle().fill(.white.opacity(0.07)))
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("EchoClock")
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.94))
-                    Text("智能浅睡眠唤醒")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.45))
-                }
-                Spacer()
-            }
-
-            Text("今晚开始，让 Apple Watch 在浅睡眠时轻轻叫醒你")
-                .font(.title3.weight(.medium))
-                .foregroundStyle(.white.opacity(0.88))
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("欢迎回来")
+                .font(.system(size: 30, weight: .semibold, design: .rounded))
+                .foregroundStyle(LumeColor.text)
+            Text("Lume 开启你的智愈晨间时光")
+                .font(.subheadline)
+                .foregroundStyle(LumeColor.textMuted.opacity(0.8))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -1016,30 +1728,25 @@ private struct LoginView: View {
     }
 
     private var tabSelector: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 26) {
             ForEach(AuthTab.allCases, id: \.self) { tab in
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
                         selectedTab = tab
                     }
                 } label: {
-                    Text(tab.rawValue)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(selectedTab == tab ? .white : .white.opacity(0.42))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(selectedTab == tab ? .white.opacity(0.12) : .clear)
-                        )
+                    VStack(spacing: 7) {
+                        Text(tab.rawValue)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(selectedTab == tab ? LumeColor.text : LumeColor.textMuted.opacity(0.62))
+                        Circle()
+                            .fill(selectedTab == tab ? LumeColor.primary : .clear)
+                            .frame(width: 4, height: 4)
+                    }
                 }
             }
+            Spacer()
         }
-        .padding(4)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(.black.opacity(0.22))
-        )
     }
 
     private var formFields: some View {
@@ -1048,8 +1755,11 @@ private struct LoginView: View {
 
             if selectedTab == .code {
                 codeField
+            } else if selectedTab == .register {
+                authField(icon: "lock.fill", placeholder: "设置密码（至少 6 位）", text: $password, isSecure: true, keyboard: .default)
+                codeField
             } else {
-                authField(icon: "lock.fill", placeholder: selectedTab == .register ? "设置密码（至少 6 位）" : "密码", text: $password, isSecure: true, keyboard: .default)
+                authField(icon: "lock.fill", placeholder: "请输入密码", text: $password, isSecure: true, keyboard: .default)
             }
         }
     }
@@ -1068,12 +1778,12 @@ private struct LoginView: View {
             } label: {
                 Text(session.smsCountdown > 0 ? "\(session.smsCountdown)s" : "获取验证码")
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(LumeColor.primary)
                     .frame(width: 92)
                     .padding(.vertical, 14)
                     .background(
                         RoundedRectangle(cornerRadius: 14)
-                            .fill(.purple.opacity(session.smsCountdown > 0 ? 0.22 : 0.55))
+                            .fill(.white.opacity(session.smsCountdown > 0 ? 0.04 : 0.08))
                     )
             }
             .disabled(session.smsCountdown > 0 || session.isLoading)
@@ -1086,10 +1796,10 @@ private struct LoginView: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: agreedToTerms ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(agreedToTerms ? .purple.opacity(0.9) : .white.opacity(0.35))
+                    .foregroundStyle(agreedToTerms ? LumeColor.primary : LumeColor.textMuted.opacity(0.48))
                 Text("我已阅读并同意《用户协议》《隐私政策》")
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.42))
+                    .foregroundStyle(LumeColor.textMuted.opacity(0.72))
                 Spacer()
             }
         }
@@ -1114,12 +1824,13 @@ private struct LoginView: View {
         } label: {
             Text(session.isLoading ? "处理中..." : primaryButtonTitle)
                 .font(.headline)
-                .foregroundStyle(.white)
+                .foregroundStyle(LumeColor.background)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing))
+                    Capsule()
+                        .fill(LumeColor.primary)
+                        .shadow(color: LumeColor.primary.opacity(0.2), radius: 12, y: 4)
                 )
         }
         .disabled(session.isLoading)
@@ -1135,7 +1846,7 @@ private struct LoginView: View {
             } label: {
                 Text(selectedTab == .password ? "用验证码登录" : "用密码登录")
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.48))
+                    .foregroundStyle(LumeColor.secondary)
             }
 
             Spacer()
@@ -1147,7 +1858,7 @@ private struct LoginView: View {
             } label: {
                 Text("新用户注册")
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.48))
+                    .foregroundStyle(LumeColor.primary)
             }
         }
     }
@@ -1163,20 +1874,19 @@ private struct LoginView: View {
     private var divider: some View {
         HStack {
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
-            Text("其他方式登录")
+            Text("或者")
                 .font(.caption2)
-                .foregroundStyle(.white.opacity(0.32))
+                .foregroundStyle(LumeColor.textMuted.opacity(0.48))
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
         }
         .padding(.vertical, 2)
     }
 
     private var quickLoginRow: some View {
-        HStack(spacing: 28) {
+        VStack(spacing: 10) {
             wechatButton
             demoButton
         }
-        .padding(.top, 2)
     }
 
     private var wechatButton: some View {
@@ -1189,15 +1899,16 @@ private struct LoginView: View {
                 await session.signInWithWeChat()
             }
         } label: {
-            VStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Image(systemName: "message.fill")
-                    .font(.title3)
-                    .frame(width: 48, height: 48)
-                    .background(Circle().fill(Color(red: 0.08, green: 0.62, blue: 0.28)))
-                Text("微信")
-                    .font(.caption)
+                    .foregroundStyle(Color(red: 0.03, green: 0.76, blue: 0.38))
+                Text("使用微信一键登录")
+                    .font(.subheadline.weight(.medium))
             }
-            .foregroundStyle(.white.opacity(0.88))
+            .foregroundStyle(LumeColor.text)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(Capsule().fill(.white.opacity(0.055)).overlay(Capsule().stroke(.white.opacity(0.08), lineWidth: 1)))
         }
         .disabled(session.isLoading)
     }
@@ -1206,15 +1917,14 @@ private struct LoginView: View {
         Button {
             session.demoSignIn()
         } label: {
-            VStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Image(systemName: "sparkles")
-                    .font(.title3)
-                    .frame(width: 48, height: 48)
-                    .background(Circle().fill(.white.opacity(0.10)))
-                Text("演示")
-                    .font(.caption)
+                Text("演示登录")
+                    .font(.subheadline)
             }
-            .foregroundStyle(.white.opacity(0.58))
+            .foregroundStyle(LumeColor.textMuted.opacity(0.72))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
         }
     }
 
@@ -1236,7 +1946,7 @@ private struct LoginView: View {
     private func authField(icon: String, placeholder: String, text: Binding<String>, isSecure: Bool, keyboard: UIKeyboardType) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .foregroundStyle(.purple.opacity(0.7))
+                .foregroundStyle(LumeColor.textMuted.opacity(0.66))
                 .frame(width: 22)
             if isSecure {
                 SecureField(placeholder, text: text)
@@ -1249,12 +1959,12 @@ private struct LoginView: View {
                     .autocorrectionDisabled()
             }
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(LumeColor.text)
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(.black.opacity(0.22))
+                .fill(.white.opacity(0.035))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(.white.opacity(0.08), lineWidth: 1)
