@@ -43,6 +43,7 @@ enum EMASAuthMode {
 enum EMASClientError: LocalizedError {
     case invalidResponse
     case missingSession
+    case wechatUnavailable(String)
     case serverMessage(String)
 
     var errorDescription: String? {
@@ -50,7 +51,9 @@ enum EMASClientError: LocalizedError {
         case .invalidResponse:
             return "EMAS 返回格式无法解析"
         case .missingSession:
-            return "登录成功响应中缺少 token 或用户信息"
+            return "登录服务未返回有效登录态，请检查云函数是否返回 token"
+        case .wechatUnavailable(let message):
+            return message
         case .serverMessage(let message):
             return message
         }
@@ -118,10 +121,18 @@ final class EMASServerlessClient {
             target: EMASConfig.wechatLoginFunctionTarget,
             arguments: baseArguments([
                 "provider": "wechat",
-                "message": "WeChat native SDK is not linked yet. Return a demo binding token or add WeChat SDK auth code here."
+                "providerName": "微信",
+                "authCode": NSNull(),
+                "message": "iOS WeChat SDK is not linked yet. The cloud function should return a test token or guide binding WeChat SDK auth code."
             ])
         )
-        return try parseAuthSession(from: result, fallbackPhone: nil)
+        do {
+            return try parseAuthSession(from: result, fallbackPhone: nil)
+        } catch {
+            let message = readableMessage(from: result)
+                ?? "微信登录服务未配置：请在云函数 auth-wechat-login 中返回 token，或先接入微信开放平台 SDK 获取 authCode。"
+            throw EMASClientError.wechatUnavailable(message)
+        }
     }
 
     private func baseArguments(_ arguments: [String: Any]) -> [String: Any] {
@@ -210,13 +221,7 @@ final class EMASServerlessClient {
         if let error = object["error"] as? String {
             throw EMASClientError.serverMessage(error)
         }
-        if let body = object["body"] as? [String: Any] {
-            return body
-        }
-        if let result = object["result"] as? [String: Any] {
-            return result
-        }
-        return object
+        return unwrapResponse(object)
     }
 
     private func signature(method: String, paramsJSON: String, timestamp: Int) -> String {
@@ -263,5 +268,46 @@ final class EMASServerlessClient {
         }
 
         throw EMASClientError.missingSession
+    }
+
+    private func unwrapResponse(_ object: [String: Any]) -> [String: Any] {
+        if let body = object["body"] as? [String: Any] {
+            if let result = body["result"] as? [String: Any] {
+                return result
+            }
+            if let data = body["data"] as? [String: Any] {
+                return data
+            }
+            return body
+        }
+        if let result = object["result"] as? [String: Any] {
+            return result
+        }
+        if let data = object["data"] as? [String: Any] {
+            return data
+        }
+        return object
+    }
+
+    private func readableMessage(from object: [String: Any]) -> String? {
+        let candidates = [
+            object,
+            object["result"] as? [String: Any],
+            object["data"] as? [String: Any],
+            object["body"] as? [String: Any]
+        ].compactMap { $0 }
+
+        for candidate in candidates {
+            if let message = candidate["message"] as? String, !message.isEmpty {
+                return message
+            }
+            if let message = candidate["msg"] as? String, !message.isEmpty {
+                return message
+            }
+            if let error = candidate["error"] as? String, !error.isEmpty {
+                return error
+            }
+        }
+        return nil
     }
 }

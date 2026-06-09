@@ -91,9 +91,7 @@ final class AppSessionViewModel: ObservableObject {
     }
 
     func signInWithWeChat() async {
-        await authenticate {
-            try await EMASServerlessClient.shared.loginWithWeChat()
-        }
+        authMessage = "微信快捷登录需先接入微信开放平台 SDK 并配置 auth-wechat-login 云函数"
     }
 
     func demoSignIn() {

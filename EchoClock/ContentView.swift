@@ -524,42 +524,34 @@ private struct LoginView: View {
             )
             .ignoresSafeArea()
 
-            VStack(spacing: 28) {
-                Spacer(minLength: 24)
-
+            VStack(spacing: 24) {
                 brandHeader
+                    .padding(.top, 52)
 
                 VStack(spacing: 14) {
+                    panelTitle
                     tabSelector
                     formFields
-                    termsRow
                     primaryButton
+                    secondaryActions
 
                     divider
-                    wechatButton
-                    demoButton
+                    quickLoginRow
+                    termsRow
 
                     if let message = session.authMessage {
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(.orange.opacity(0.9))
-                            .multilineTextAlignment(.center)
+                        messageView(message)
                     }
                 }
-                .padding(20)
+                .padding(22)
                 .background(
                     RoundedRectangle(cornerRadius: 22)
-                        .fill(.white.opacity(0.045))
+                        .fill(.white.opacity(0.055))
                         .overlay(
                             RoundedRectangle(cornerRadius: 22)
                                 .stroke(.white.opacity(0.08), lineWidth: 1)
                         )
                 )
-
-                Text("手机号验证码、密码登录与微信快捷登录已接入 EMAS Serverless 云函数")
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.28))
-                    .multilineTextAlignment(.center)
 
                 Spacer(minLength: 24)
             }
@@ -569,21 +561,46 @@ private struct LoginView: View {
     }
 
     private var brandHeader: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "moon.stars.fill")
-                .font(.system(size: 44))
-                .foregroundStyle(
-                    LinearGradient(colors: [.purple, .indigo], startPoint: .top, endPoint: .bottom)
-                )
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "moon.stars.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(
+                        LinearGradient(colors: [.purple, .indigo], startPoint: .top, endPoint: .bottom)
+                    )
+                    .frame(width: 48, height: 48)
+                    .background(Circle().fill(.white.opacity(0.07)))
 
-            Text("EchoClock")
-                .font(.system(size: 30, weight: .light, design: .rounded))
-                .tracking(5)
-                .foregroundStyle(.white.opacity(0.92))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("EchoClock")
+                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.94))
+                    Text("智能浅睡眠唤醒")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+                Spacer()
+            }
 
-            Text("登录后管理你的智能唤醒计划")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.42))
+            Text("今晚开始，让 Apple Watch 在浅睡眠时轻轻叫醒你")
+                .font(.title3.weight(.medium))
+                .foregroundStyle(.white.opacity(0.88))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var panelTitle: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("登录 / 注册")
+                    .font(.headline)
+                    .foregroundStyle(.white.opacity(0.92))
+                Text("未注册手机号验证后自动创建账号")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.38))
+            }
+            Spacer()
         }
     }
 
@@ -596,7 +613,7 @@ private struct LoginView: View {
                     }
                 } label: {
                     Text(tab.rawValue)
-                        .font(.caption.weight(.medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundStyle(selectedTab == tab ? .white : .white.opacity(0.42))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
@@ -627,21 +644,21 @@ private struct LoginView: View {
     }
 
     private var phoneField: some View {
-        authField(icon: "iphone", placeholder: "手机号", text: $phone, isSecure: false, keyboard: .numberPad)
+        authField(icon: "iphone", placeholder: "请输入手机号", text: $phone, isSecure: false, keyboard: .numberPad)
     }
 
     private var codeField: some View {
         HStack(spacing: 10) {
-            authField(icon: "number", placeholder: "验证码", text: $code, isSecure: false, keyboard: .numberPad)
+            authField(icon: "number", placeholder: "请输入验证码", text: $code, isSecure: false, keyboard: .numberPad)
             Button {
                 Task {
                     await session.sendSMSCode(phone: phone)
                 }
             } label: {
-                Text(session.smsCountdown > 0 ? "\(session.smsCountdown)s" : "获取")
+                Text(session.smsCountdown > 0 ? "\(session.smsCountdown)s" : "获取验证码")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.white)
-                    .frame(width: 72)
+                    .frame(width: 92)
                     .padding(.vertical, 14)
                     .background(
                         RoundedRectangle(cornerRadius: 14)
@@ -659,7 +676,7 @@ private struct LoginView: View {
             HStack(spacing: 8) {
                 Image(systemName: agreedToTerms ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(agreedToTerms ? .purple.opacity(0.9) : .white.opacity(0.35))
-                Text("我已阅读并同意用户协议与隐私政策")
+                Text("我已阅读并同意《用户协议》《隐私政策》")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.42))
                 Spacer()
@@ -698,9 +715,35 @@ private struct LoginView: View {
         .padding(.top, 4)
     }
 
+    private var secondaryActions: some View {
+        HStack {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    selectedTab = selectedTab == .password ? .code : .password
+                }
+            } label: {
+                Text(selectedTab == .password ? "用验证码登录" : "用密码登录")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.48))
+            }
+
+            Spacer()
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    selectedTab = .register
+                }
+            } label: {
+                Text("新用户注册")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.48))
+            }
+        }
+    }
+
     private var primaryButtonTitle: String {
         switch selectedTab {
-        case .code: return "手机号登录"
+        case .code: return "登录"
         case .password: return "密码登录"
         case .register: return "注册并登录"
         }
@@ -709,12 +752,20 @@ private struct LoginView: View {
     private var divider: some View {
         HStack {
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
-            Text("快捷登录")
+            Text("其他方式登录")
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.32))
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
         }
         .padding(.vertical, 2)
+    }
+
+    private var quickLoginRow: some View {
+        HStack(spacing: 28) {
+            wechatButton
+            demoButton
+        }
+        .padding(.top, 2)
     }
 
     private var wechatButton: some View {
@@ -727,18 +778,15 @@ private struct LoginView: View {
                 await session.signInWithWeChat()
             }
         } label: {
-            HStack(spacing: 10) {
+            VStack(spacing: 8) {
                 Image(systemName: "message.fill")
-                Text("微信快捷登录")
-                    .font(.subheadline.weight(.medium))
+                    .font(.title3)
+                    .frame(width: 48, height: 48)
+                    .background(Circle().fill(Color(red: 0.08, green: 0.62, blue: 0.28)))
+                Text("微信")
+                    .font(.caption)
             }
             .foregroundStyle(.white.opacity(0.88))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(red: 0.08, green: 0.55, blue: 0.25).opacity(0.42))
-            )
         }
         .disabled(session.isLoading)
     }
@@ -747,12 +795,30 @@ private struct LoginView: View {
         Button {
             session.demoSignIn()
         } label: {
-            Text("演示登录")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.58))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+            VStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.title3)
+                    .frame(width: 48, height: 48)
+                    .background(Circle().fill(.white.opacity(0.10)))
+                Text("演示")
+                    .font(.caption)
+            }
+            .foregroundStyle(.white.opacity(0.58))
         }
+    }
+
+    private func messageView(_ message: String) -> some View {
+        Text(message)
+            .font(.caption)
+            .foregroundStyle(.orange.opacity(0.92))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.orange.opacity(0.10))
+            )
     }
 
     @ViewBuilder
