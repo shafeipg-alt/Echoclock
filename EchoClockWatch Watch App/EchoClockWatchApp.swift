@@ -1,6 +1,6 @@
 //
-//  EchoClockApp.swift
-//  EchoClock
+//  EchoClockWatchApp.swift
+//  EchoClockWatch Watch App
 //
 //  Created by 沙飞 on 2026/6/2.
 //
@@ -8,15 +8,14 @@
 import SwiftUI
 
 @main
-struct EchoClockApp: App {
+struct EchoClockWatch_Watch_AppApp: App {
     init() {
-        // 提前激活 WatchConnectivity Session
         _ = WatchConnectivityManager.shared
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            WatchContentView()
         }
     }
 }

@@ -6,20 +6,89 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		2562EA382FCECCD300CB9ADD /* EchoClockWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 2562EA2E2FCECCD200CB9ADD /* EchoClockWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		2562EA362FCECCD300CB9ADD /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2562EA142FCECBEB00CB9ADD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2562EA2D2FCECCD200CB9ADD;
+			remoteInfo = "EchoClockWatch Watch App";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2562EA3C2FCECCD300CB9ADD /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				2562EA382FCECCD300CB9ADD /* EchoClockWatch Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		2562EA1C2FCECBEB00CB9ADD /* EchoClock.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EchoClock.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2562EA2E2FCECCD200CB9ADD /* EchoClockWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "EchoClockWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		2562EAC22FCED8E400CB9ADD /* Exceptions for "EchoClock" folder in "EchoClock" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 2562EA1B2FCECBEB00CB9ADD /* EchoClock */;
+		};
+		2562EAC42FCED91200CB9ADD /* Exceptions for "EchoClockWatch Watch App" folder in "EchoClockWatch Watch App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"EchoClockWatch-Watch-App-Info.plist",
+			);
+			target = 2562EA2D2FCECCD200CB9ADD /* EchoClockWatch Watch App */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		2562EA1E2FCECBEB00CB9ADD /* EchoClock */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				2562EAC22FCED8E400CB9ADD /* Exceptions for "EchoClock" folder in "EchoClock" target */,
+			);
 			path = EchoClock;
+			sourceTree = "<group>";
+		};
+		2562EA2F2FCECCD200CB9ADD /* EchoClockWatch Watch App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				2562EAC42FCED91200CB9ADD /* Exceptions for "EchoClockWatch Watch App" folder in "EchoClockWatch Watch App" target */,
+			);
+			path = "EchoClockWatch Watch App";
+			sourceTree = "<group>";
+		};
+		2562EA402FCECCD400CB9ADD /* EchoClockShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = EchoClockShared;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		2562EA192FCECBEB00CB9ADD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2562EA2B2FCECCD200CB9ADD /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +102,8 @@
 			isa = PBXGroup;
 			children = (
 				2562EA1E2FCECBEB00CB9ADD /* EchoClock */,
+				2562EA2F2FCECCD200CB9ADD /* EchoClockWatch Watch App */,
+				2562EA402FCECCD400CB9ADD /* EchoClockShared */,
 				2562EA1D2FCECBEB00CB9ADD /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +112,7 @@
 			isa = PBXGroup;
 			children = (
 				2562EA1C2FCECBEB00CB9ADD /* EchoClock.app */,
+				2562EA2E2FCECCD200CB9ADD /* EchoClockWatch Watch App.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -55,19 +127,45 @@
 				2562EA182FCECBEB00CB9ADD /* Sources */,
 				2562EA192FCECBEB00CB9ADD /* Frameworks */,
 				2562EA1A2FCECBEB00CB9ADD /* Resources */,
+				2562EA3C2FCECCD300CB9ADD /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				2562EA372FCECCD300CB9ADD /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				2562EA1E2FCECBEB00CB9ADD /* EchoClock */,
+				2562EA402FCECCD400CB9ADD /* EchoClockShared */,
 			);
 			name = EchoClock;
 			packageProductDependencies = (
 			);
 			productName = EchoClock;
 			productReference = 2562EA1C2FCECBEB00CB9ADD /* EchoClock.app */;
+			productType = "com.apple.product-type.application";
+		};
+		2562EA2D2FCECCD200CB9ADD /* EchoClockWatch Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2562EA392FCECCD300CB9ADD /* Build configuration list for PBXNativeTarget "EchoClockWatch Watch App" */;
+			buildPhases = (
+				2562EA2A2FCECCD200CB9ADD /* Sources */,
+				2562EA2B2FCECCD200CB9ADD /* Frameworks */,
+				2562EA2C2FCECCD200CB9ADD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2562EA2F2FCECCD200CB9ADD /* EchoClockWatch Watch App */,
+				2562EA402FCECCD400CB9ADD /* EchoClockShared */,
+			);
+			name = "EchoClockWatch Watch App";
+			packageProductDependencies = (
+			);
+			productName = "EchoClockWatch Watch App";
+			productReference = 2562EA2E2FCECCD200CB9ADD /* EchoClockWatch Watch App.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -81,6 +179,9 @@
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					2562EA1B2FCECBEB00CB9ADD = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					2562EA2D2FCECCD200CB9ADD = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -100,12 +201,20 @@
 			projectRoot = "";
 			targets = (
 				2562EA1B2FCECBEB00CB9ADD /* EchoClock */,
+				2562EA2D2FCECCD200CB9ADD /* EchoClockWatch Watch App */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		2562EA1A2FCECBEB00CB9ADD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2562EA2C2FCECCD200CB9ADD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +231,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2562EA2A2FCECCD200CB9ADD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		2562EA372FCECCD300CB9ADD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2562EA2D2FCECCD200CB9ADD /* EchoClockWatch Watch App */;
+			targetProxy = 2562EA362FCECCD300CB9ADD /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		2562EA252FCECBEC00CB9ADD /* Debug */ = {
@@ -251,16 +375,24 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = EchoClock/EchoClock.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QZ5J3B4C7M;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = EchoClock/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = EchoClock;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "EchoClock 需要读取您的心率与睡眠数据，以便在浅睡眠阶段智能唤醒您。";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "EchoClock 需要访问健康数据以提供智能唤醒功能。";
+				INFOPLIST_KEY_NSMotionUsageDescription = "EchoClock 需要检测身体微动以判断浅睡眠状态。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "audio fetch processing";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -283,16 +415,24 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = EchoClock/EchoClock.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QZ5J3B4C7M;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = EchoClock/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = EchoClock;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "EchoClock 需要读取您的心率与睡眠数据，以便在浅睡眠阶段智能唤醒您。";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "EchoClock 需要访问健康数据以提供智能唤醒功能。";
+				INFOPLIST_KEY_NSMotionUsageDescription = "EchoClock 需要检测身体微动以判断浅睡眠状态。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "audio fetch processing";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -307,6 +447,82 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		2562EA3A2FCECCD300CB9ADD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "EchoClockWatch Watch App/EchoClockWatch.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QZ5J3B4C7M;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "EchoClockWatch-Watch-App-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = EchoClockWatch;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "EchoClock 需要读取您的心率数据，以便在浅睡眠阶段通过震动智能唤醒您。";
+				INFOPLIST_KEY_NSMotionUsageDescription = "EchoClock 需要检测手腕微动以判断浅睡眠状态。";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKBackgroundModes = "workout-processing";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = mika.sha.EchoClock;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = mika.sha.EchoClock.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.6;
+			};
+			name = Debug;
+		};
+		2562EA3B2FCECCD300CB9ADD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "EchoClockWatch Watch App/EchoClockWatch.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QZ5J3B4C7M;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "EchoClockWatch-Watch-App-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = EchoClockWatch;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "EchoClock 需要读取您的心率数据，以便在浅睡眠阶段通过震动智能唤醒您。";
+				INFOPLIST_KEY_NSMotionUsageDescription = "EchoClock 需要检测手腕微动以判断浅睡眠状态。";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKBackgroundModes = "workout-processing";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = mika.sha.EchoClock;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = mika.sha.EchoClock.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.6;
 			};
 			name = Release;
 		};
@@ -327,6 +543,15 @@
 			buildConfigurations = (
 				2562EA282FCECBEC00CB9ADD /* Debug */,
 				2562EA292FCECBEC00CB9ADD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2562EA392FCECCD300CB9ADD /* Build configuration list for PBXNativeTarget "EchoClockWatch Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2562EA3A2FCECCD300CB9ADD /* Debug */,
+				2562EA3B2FCECCD300CB9ADD /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
