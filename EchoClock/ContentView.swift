@@ -58,7 +58,7 @@ struct ContentView: View {
                     clockSection
                     wakeRangeSection
                     soundSection
-                    alarmToggleSection
+                    monitoringActionSection
                     statusSection
                 }
                 .padding(.horizontal, 24)
@@ -165,7 +165,7 @@ struct ContentView: View {
                             .foregroundStyle(.white.opacity(0.3))
                     }
 
-                    Text("范围内检测到浅睡眠立即唤醒，否则在 \(viewModel.alarm.formattedWakeEndTime) 唤醒")
+                    Text("范围内 60-72 BPM 或心率上升会唤醒，否则在 \(viewModel.alarm.formattedWakeEndTime) 唤醒")
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.38))
                         .multilineTextAlignment(.center)
@@ -252,35 +252,91 @@ struct ContentView: View {
         )
     }
 
-    // MARK: - 闹钟开关
+    // MARK: - 智能监测开关
 
-    private var alarmToggleSection: some View {
-        Button {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                viewModel.toggleAlarm()
+    private var monitoringActionSection: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(viewModel.alarm.isOn ? .green.opacity(0.18) : .white.opacity(0.07))
+                        .frame(width: 48, height: 48)
+                    Image(systemName: viewModel.alarm.isOn ? "waveform.path.ecg" : "applewatch")
+                        .font(.title3)
+                        .foregroundStyle(viewModel.alarm.isOn ? .green.opacity(0.9) : .purple.opacity(0.75))
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(viewModel.alarm.isOn ? "智能监测运行中" : "准备开始智能监测")
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.9))
+                    Text(viewModel.alarm.isOn ? viewModel.monitoringStatus : "同步 Apple Watch，并在唤醒范围内分析心率")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.42))
+                        .lineLimit(2)
+                }
+
+                Spacer()
             }
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: viewModel.alarm.isOn ? "bell.fill" : "bell.slash.fill")
-                    .font(.title2)
-                Text(viewModel.alarm.isOn ? "闹钟已开启" : "开启闹钟")
-                    .font(.headline)
+
+            HStack(spacing: 10) {
+                monitorStep(icon: "applewatch", text: "连接 Watch", isActive: viewModel.alarm.isOn)
+                monitorStep(icon: "heart.fill", text: "读取心率", isActive: viewModel.latestHeartRate > 0)
+                monitorStep(icon: "bell.fill", text: "智能唤醒", isActive: viewModel.isAlarmRinging)
             }
-            .foregroundStyle(viewModel.alarm.isOn ? .white : .white.opacity(0.7))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        viewModel.alarm.isOn
-                            ? LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing)
-                            : LinearGradient(colors: [.white.opacity(0.08), .white.opacity(0.05)], startPoint: .leading, endPoint: .trailing)
-                    )
-                    .shadow(color: viewModel.alarm.isOn ? .purple.opacity(0.4) : .clear, radius: 16, y: 6)
-            )
+
+            Button {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                    viewModel.toggleAlarm()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: viewModel.alarm.isOn ? "stop.fill" : "play.fill")
+                        .font(.headline)
+                    Text(viewModel.alarm.isOn ? "停止智能监测" : "开始智能监测")
+                        .font(.headline)
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(
+                            viewModel.alarm.isOn
+                                ? LinearGradient(colors: [.red.opacity(0.8), .orange.opacity(0.7)], startPoint: .leading, endPoint: .trailing)
+                                : LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing)
+                        )
+                        .shadow(color: viewModel.alarm.isOn ? .red.opacity(0.26) : .purple.opacity(0.4), radius: 16, y: 6)
+                )
+            }
         }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.white.opacity(0.045))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(.white.opacity(0.08), lineWidth: 1)
+                )
+        )
     }
 
+    private func monitorStep(icon: String, text: String, isActive: Bool) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.caption2)
+            Text(text)
+                .font(.caption2)
+                .lineLimit(1)
+        }
+        .foregroundStyle(isActive ? .white.opacity(0.9) : .white.opacity(0.36))
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isActive ? .white.opacity(0.11) : .black.opacity(0.16))
+        )
+    }
     // MARK: - 状态信息
 
     private var statusSection: some View {
@@ -307,6 +363,7 @@ struct ContentView: View {
             statusRow(icon: "waveform.path.ecg", label: "监测状态", value: viewModel.monitoringStatus)
             statusRow(icon: "heart.text.square.fill", label: "实时心率", value: heartRateText)
             statusRow(icon: "sensor.tag.radiowaves.forward.fill", label: "心率来源", value: viewModel.heartRateSourceStatus)
+            statusRow(icon: "checkmark.seal.fill", label: "唤醒规则", value: viewModel.triggerReasonStatus)
             if HealthKitManager.shared.isUsingMockData {
                 statusRow(icon: "waveform.path.ecg", label: "心率模式", value: "模拟数据")
             }
@@ -335,6 +392,9 @@ struct ContentView: View {
             Text(value)
                 .foregroundStyle(.white.opacity(0.6))
                 .font(.caption)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
         }
     }
 

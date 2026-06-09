@@ -31,6 +31,8 @@ final class AlarmViewModel: ObservableObject {
     @Published var wearableSignalStatus: String = "等待手表信号"
     /// 心率数据来源
     @Published var heartRateSourceStatus: String = "等待数据"
+    /// 最近一次唤醒判定原因
+    @Published var triggerReasonStatus: String = "尚未触发"
 
     private var clockTimer: Timer?
     private let alarmStorageKey = "EchoClock.alarm"
@@ -207,6 +209,7 @@ final class AlarmViewModel: ObservableObject {
                 self.latestHeartRate = HealthKitManager.shared.latestHeartRate
                 self.monitoringStatus = Self.statusText(for: SleepAnalyzer.shared.state)
                 self.heartRateSourceStatus = HealthKitManager.shared.heartRateSourceDescription
+                self.triggerReasonStatus = SleepAnalyzer.shared.lastTriggerReason.isEmpty ? "尚未触发" : SleepAnalyzer.shared.lastTriggerReason
                 self.updateWearableSignalStatus()
             }
         }
@@ -215,8 +218,8 @@ final class AlarmViewModel: ObservableObject {
     private static func statusText(for state: SleepMonitoringState) -> String {
         switch state {
         case .idle: return "待机中"
-        case .waitingForWindow: return "等待唤醒范围"
-        case .monitoring: return "正在分析浅睡眠"
+        case .waitingForWindow: return "已开启，等待进入范围"
+        case .monitoring: return "范围内，正在分析心率"
         case .triggered: return "已触发唤醒"
         }
     }

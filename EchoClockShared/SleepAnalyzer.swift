@@ -36,9 +36,15 @@ final class SleepAnalyzer: ObservableObject {
     @Published private(set) var currentHeartRate: Double = 0
     /// 是否检测到身体微动
     @Published private(set) var motionDetected: Bool = false
+    /// 最近一次智能唤醒触发原因
+    @Published private(set) var lastTriggerReason: String = ""
 
     /// 心率上升触发阈值（相对基线的百分比，默认 10%）
     var heartRateRiseThreshold: Double = 0.10
+    /// 浅睡眠常见静息心率区间；用于基线不足时的绝对判定。
+    var lightSleepHeartRateRange: ClosedRange<Double> = 60...72
+    /// 深睡低心率上限。低于该值时优先等待，不提前唤醒。
+    var deepSleepHeartRateUpperBound: Double = 58
     /// 基线采样窗口（秒），默认 30 分钟
     var baselineWindowSeconds: TimeInterval = 30 * 60
 
@@ -65,6 +71,7 @@ final class SleepAnalyzer: ObservableObject {
         state = .waitingForWindow
         heartRateHistory.removeAll()
         baselineHeartRate = 0
+        lastTriggerReason = ""
         motionDetected = false
 
         #if os(watchOS)
@@ -153,6 +160,20 @@ final class SleepAnalyzer: ObservableObject {
     // MARK: - 浅睡眠判定
 
     private func evaluateLightSleep() {
+        if lightSleepHeartRateRange.contains(currentHeartRate) {
+            triggerSmartWakeUp(reason: String(
+                format: "心率 %.0f BPM 处于浅睡眠唤醒区间 %.0f-%.0f BPM",
+                currentHeartRate,
+                lightSleepHeartRateRange.lowerBound,
+                lightSleepHeartRateRange.upperBound
+            ))
+            return
+        }
+
+        if currentHeartRate <= deepSleepHeartRateUpperBound {
+            return
+        }
+
         guard baselineHeartRate > 0 else { return }
 
         let riseRatio = (currentHeartRate - baselineHeartRate) / baselineHeartRate
@@ -177,6 +198,7 @@ final class SleepAnalyzer: ObservableObject {
         guard !hasTriggered else { return }
         hasTriggered = true
         state = .triggered
+        lastTriggerReason = reason
         print("[SleepAnalyzer] 智能唤醒触发 — \(reason)")
         onSmartWakeUp?()
     }
