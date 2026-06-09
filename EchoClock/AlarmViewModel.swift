@@ -35,10 +35,15 @@ final class AlarmViewModel: ObservableObject {
     @Published var heartRateSourceStatus: String = "等待数据"
     /// 最近一次唤醒判定原因
     @Published var triggerReasonStatus: String = "尚未触发"
+    /// 基于真实心率数据估算的数据质量评分
+    @Published var heartRateQualityScore: Int?
+    /// 最近真实心率样本，用于首页动态波形。
+    @Published var recentHeartRates: [Double] = []
 
     private var clockTimer: Timer?
     private let alarmStorageKey = "EchoClock.alarm"
     private let alarmsStorageKey = "EchoClock.alarms"
+    private let didSeedDefaultAlarmKey = "EchoClock.didSeedDefaultAlarm"
 
     init() {
         loadAlarm()
@@ -85,7 +90,7 @@ final class AlarmViewModel: ObservableObject {
         let offsetMinutes = min(alarms.count, 4) * 15
         let startTime = Calendar.current.date(byAdding: .minute, value: offsetMinutes, to: Alarm.defaultWakeStartTime()) ?? Alarm.defaultWakeStartTime()
         let endTime = Calendar.current.date(byAdding: .minute, value: offsetMinutes, to: Alarm.defaultWakeEndTime()) ?? Alarm.defaultWakeEndTime()
-        let newAlarm = Alarm(wakeStartTime: startTime, wakeEndTime: endTime, isOn: false, sound: alarm.sound).normalized()
+        let newAlarm = Alarm(wakeStartTime: startTime, wakeEndTime: endTime, isOn: false, sound: alarm.sound, repeatWeekdays: Alarm.defaultRepeatWeekdays).normalized()
         alarms.append(newAlarm)
         alarm = newAlarm
         persistAlarmState()
@@ -147,6 +152,26 @@ final class AlarmViewModel: ObservableObject {
         if alarm.isOn {
             syncToWatch()
         }
+    }
+
+    /// 更新闹钟重复周期。
+    func updateRepeatWeekdays(_ weekdays: Set<Int>) {
+        alarm.repeatWeekdays = weekdays
+        saveAlarm()
+        if alarm.isOn {
+            syncToWatch()
+        }
+    }
+
+    /// 切换某一天是否重复。
+    func toggleRepeatWeekday(_ weekday: Int) {
+        var weekdays = alarm.repeatWeekdays
+        if weekdays.contains(weekday) {
+            weekdays.remove(weekday)
+        } else {
+            weekdays.insert(weekday)
+        }
+        updateRepeatWeekdays(weekdays)
     }
 
     /// 应用一个常用闹钟预设。
@@ -283,6 +308,7 @@ final class AlarmViewModel: ObservableObject {
                 self.heartRateSourceStatus = HealthKitManager.shared.heartRateSourceDescription
                 self.triggerReasonStatus = SleepAnalyzer.shared.lastTriggerReason.isEmpty ? "尚未触发" : SleepAnalyzer.shared.lastTriggerReason
                 self.updateWearableSignalStatus()
+                self.updateHeartRateQuality()
             }
         }
     }
@@ -353,7 +379,10 @@ final class AlarmViewModel: ObservableObject {
         }
 
         guard let data = UserDefaults.standard.data(forKey: alarmStorageKey),
-              let savedAlarm = try? decoder.decode(Alarm.self, from: data) else { return }
+              let savedAlarm = try? decoder.decode(Alarm.self, from: data) else {
+            seedDefaultAlarmIfNeeded()
+            return
+        }
         alarm = savedAlarm.normalized()
         alarms = [alarm]
         persistAlarmState()
@@ -378,5 +407,48 @@ final class AlarmViewModel: ObservableObject {
         UserDefaults.standard.set(data, forKey: alarmStorageKey)
         guard let alarmsData = try? JSONEncoder().encode(alarms) else { return }
         UserDefaults.standard.set(alarmsData, forKey: alarmsStorageKey)
+    }
+
+    private func seedDefaultAlarmIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: didSeedDefaultAlarmKey) else { return }
+        let defaultAlarm = Alarm(
+            wakeStartTime: Alarm.defaultWakeStartTime(),
+            wakeEndTime: Alarm.defaultWakeEndTime(),
+            isOn: false,
+            sound: .aurora,
+            repeatWeekdays: Alarm.defaultRepeatWeekdays
+        ).normalized()
+        alarm = defaultAlarm
+        alarms = [defaultAlarm]
+        UserDefaults.standard.set(true, forKey: didSeedDefaultAlarmKey)
+        persistAlarmState()
+    }
+
+    private func updateHeartRateQuality() {
+        guard latestHeartRate > 0, !HealthKitManager.shared.isUsingMockData else {
+            heartRateQualityScore = nil
+            recentHeartRates.removeAll()
+            return
+        }
+
+        if recentHeartRates.last != latestHeartRate {
+            recentHeartRates.append(latestHeartRate)
+            if recentHeartRates.count > 24 {
+                recentHeartRates.removeFirst(recentHeartRates.count - 24)
+            }
+        }
+
+        let sampleScore = min(40, recentHeartRates.count * 3)
+        let sourceScore = heartRateSourceStatus.contains("Apple Watch") ? 35 : 25
+        let stabilityScore: Int
+        if recentHeartRates.count >= 3 {
+            let average = recentHeartRates.reduce(0, +) / Double(recentHeartRates.count)
+            let variance = recentHeartRates.reduce(0) { $0 + pow($1 - average, 2) } / Double(recentHeartRates.count)
+            let standardDeviation = sqrt(variance)
+            stabilityScore = max(10, 25 - Int(standardDeviation * 2))
+        } else {
+            stabilityScore = 12
+        }
+        heartRateQualityScore = min(99, sampleScore + sourceScore + stabilityScore)
     }
 }

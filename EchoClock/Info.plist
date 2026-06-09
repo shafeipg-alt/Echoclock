@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSHealthShareUsageDescription</key>
+	<string>EchoClock 需要读取心率与睡眠数据，用于判断浅睡眠唤醒时机和展示健康数据质量。</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>EchoClock 仅在 Apple Watch 监测会话需要时使用健康权限，不会写入无关健康数据。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>EchoClock 可能使用本地网络发现或连接智能穿戴设备，用于同步闹钟和心率状态。</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

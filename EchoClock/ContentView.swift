@@ -179,6 +179,15 @@ struct ContentView: View {
                                     Label("删除", systemImage: "trash.fill")
                                 }
                             }
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        viewModel.deleteAlarm(alarm)
+                                    }
+                                } label: {
+                                    Label("删除", systemImage: "trash.fill")
+                                }
+                            }
                     }
                 }
             }
@@ -309,7 +318,7 @@ struct ContentView: View {
             }
 
             HStack {
-                Text(alarm.isOn ? "监测中" : "未开启")
+                Text(alarm.formattedRepeatText)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(alarm.isOn ? LumeColor.primary : LumeColor.textMuted)
                 Spacer()
@@ -359,13 +368,17 @@ struct ContentView: View {
     }
 
     private var sleepBentoGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
-            bentoMetricCard(icon: "moon.zzz.fill", title: "睡眠效率", value: "94", suffix: "%", accent: LumeColor.secondary, progress: 0.94)
-                .onTapGesture { selectedDashboardTab = .stats }
-            heartRateBentoCard
-                .onTapGesture { selectedDashboardTab = .sleep }
+        Group {
+            if let score = viewModel.heartRateQualityScore, viewModel.latestHeartRate > 0 {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                    bentoMetricCard(icon: "checkmark.seal.fill", title: "数据质量", value: "\(score)", suffix: "分", accent: LumeColor.secondary, progress: Double(score) / 100.0)
+                        .onTapGesture { activeSheet = .heartRateSettings }
+                    heartRateBentoCard
+                        .onTapGesture { selectedDashboardTab = .sleep }
+                }
+                .padding(.top, 12)
+            }
         }
-        .padding(.top, 12)
     }
 
     private func bentoMetricCard(icon: String, title: String, value: String, suffix: String, accent: Color, progress: Double) -> some View {
@@ -416,7 +429,7 @@ struct ContentView: View {
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(viewModel.latestHeartRate > 0 ? "\(Int(viewModel.latestHeartRate))" : "62")
+                Text("\(Int(viewModel.latestHeartRate))")
                     .font(.title2.weight(.bold))
                     .foregroundStyle(LumeColor.text)
                 Text("BPM")
@@ -424,9 +437,7 @@ struct ContentView: View {
                     .foregroundStyle(LumeColor.textMuted)
             }
 
-            ECGLine()
-                .stroke(LumeColor.primary, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                .opacity(0.45)
+            HeartRateSparkline(samples: viewModel.recentHeartRates)
                 .frame(height: 34)
         }
         .frame(height: 126)
@@ -865,6 +876,8 @@ struct ContentView: View {
             .padding(18)
             .glassCard(cornerRadius: 22)
 
+            repeatWeekdaySelector
+
             sheetActionButton(title: viewModel.alarm.isOn ? "停止智能闹钟" : "开启智能闹钟", icon: viewModel.alarm.isOn ? "stop.fill" : "play.fill") {
                 viewModel.toggleAlarm()
             }
@@ -873,6 +886,47 @@ struct ContentView: View {
                 viewModel.applyPresetWakeWindow(startHour: 7, startMinute: 45, endHour: 8, endMinute: 15)
             }
         }
+    }
+
+    private var repeatWeekdaySelector: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("重复", systemImage: "repeat")
+                    .font(.headline)
+                    .foregroundStyle(LumeColor.text)
+                Spacer()
+                Text(viewModel.alarm.formattedRepeatText)
+                    .font(.caption)
+                    .foregroundStyle(LumeColor.textMuted)
+                    .lineLimit(1)
+            }
+
+            HStack(spacing: 8) {
+                ForEach(repeatWeekdayOptions, id: \.weekday) { option in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            viewModel.toggleRepeatWeekday(option.weekday)
+                        }
+                    } label: {
+                        Text(option.title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(viewModel.alarm.repeatWeekdays.contains(option.weekday) ? LumeColor.background : LumeColor.textMuted)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 34)
+                            .background(
+                                Capsule()
+                                    .fill(viewModel.alarm.repeatWeekdays.contains(option.weekday) ? LumeColor.primary : LumeColor.surfaceHigh.opacity(0.58))
+                            )
+                    }
+                }
+            }
+        }
+        .padding(18)
+        .glassCard(cornerRadius: 22)
+    }
+
+    private var repeatWeekdayOptions: [(weekday: Int, title: String)] {
+        [(2, "一"), (3, "二"), (4, "三"), (5, "四"), (6, "五"), (7, "六"), (1, "日")]
     }
 
     private var deviceSettingsContent: some View {
@@ -1920,6 +1974,45 @@ private struct ECGLine: Shape {
     }
 }
 
+private struct HeartRateSparkline: View {
+    let samples: [Double]
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            Canvas { context, size in
+                let values = normalizedSamples
+                guard values.count > 1 else { return }
+
+                var path = Path()
+                for index in values.indices {
+                    let x = size.width * CGFloat(index) / CGFloat(max(values.count - 1, 1))
+                    let wave = sin(timeline.date.timeIntervalSinceReferenceDate * 2.4 + Double(index) * 0.8) * 0.05
+                    let yRatio = min(0.92, max(0.08, values[index] + wave))
+                    let point = CGPoint(x: x, y: size.height * CGFloat(1 - yRatio))
+                    if index == 0 {
+                        path.move(to: point)
+                    } else {
+                        path.addLine(to: point)
+                    }
+                }
+
+                context.stroke(path, with: .linearGradient(
+                    Gradient(colors: [LumeColor.secondary, LumeColor.primary]),
+                    startPoint: CGPoint(x: 0, y: 0),
+                    endPoint: CGPoint(x: size.width, y: 0)
+                ), style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
+            }
+        }
+    }
+
+    private var normalizedSamples: [Double] {
+        let source = samples.isEmpty ? [58, 59, 57, 60, 61, 60] : samples
+        guard let minValue = source.min(), let maxValue = source.max() else { return source }
+        let range = max(1, maxValue - minValue)
+        return source.map { ($0 - minValue) / range * 0.72 + 0.14 }
+    }
+}
+
 // MARK: - App 启动页
 
 private struct AppLaunchView: View {
@@ -1977,6 +2070,7 @@ private struct LoginView: View {
     @State private var code = ""
     @State private var password = ""
     @State private var agreedToTerms = true
+    @State private var isShowingWelcome = true
 
     var body: some View {
         ZStack {
@@ -1986,32 +2080,105 @@ private struct LoginView: View {
             LinearGradient(colors: [.clear, LumeColor.secondary.opacity(0.22), .clear], startPoint: .topTrailing, endPoint: .bottomLeading)
                 .ignoresSafeArea()
 
-            VStack(spacing: 28) {
-                brandHeader
-                    .padding(.top, 70)
+            if isShowingWelcome {
+                loginWelcomeContent
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
+            } else {
+                VStack(spacing: 28) {
+                    brandHeader
+                        .padding(.top, 70)
 
-                VStack(spacing: 14) {
-                    tabSelector
-                    formFields
-                    primaryButton
-                    secondaryActions
+                    VStack(spacing: 14) {
+                        tabSelector
+                        formFields
+                        primaryButton
+                        secondaryActions
 
-                    divider
-                    quickLoginRow
-                    termsRow
+                        divider
+                        quickLoginRow
+                        termsRow
 
-                    if let message = session.authMessage {
-                        messageView(message)
+                        if let message = session.authMessage {
+                            messageView(message)
+                        }
                     }
-                }
-                .padding(22)
-                .glassCard(cornerRadius: 28)
+                    .padding(22)
+                    .glassCard(cornerRadius: 28)
 
-                Spacer(minLength: 24)
+                    Spacer(minLength: 24)
+                }
+                .padding(.horizontal, 24)
+                .transition(.opacity.combined(with: .move(edge: .leading)))
             }
-            .padding(.horizontal, 24)
         }
         .preferredColorScheme(.dark)
+    }
+
+    private var loginWelcomeContent: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            Spacer()
+
+            Image(systemName: "moon.stars.fill")
+                .font(.system(size: 46))
+                .foregroundStyle(LinearGradient(colors: [LumeColor.primary, LumeColor.secondary], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 86, height: 86)
+                .glassCard(cornerRadius: 43)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("欢迎使用 EchoClock")
+                    .font(.system(size: 34, weight: .semibold, design: .rounded))
+                    .foregroundStyle(LumeColor.text)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+                Text("登录后将同步你的智能闹钟配置，并请求网络连接与健康数据读取，用于 Apple Watch 心率监测和浅睡眠唤醒。")
+                    .font(.subheadline)
+                    .foregroundStyle(LumeColor.textMuted.opacity(0.82))
+                    .lineSpacing(4)
+            }
+
+            VStack(spacing: 12) {
+                permissionPreviewRow(icon: "wifi", title: "无线网与蜂窝数据", detail: "用于登录、云端同步和设备状态更新")
+                permissionPreviewRow(icon: "heart.fill", title: "健康数据", detail: "读取心率与睡眠数据，评估唤醒时机")
+            }
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isShowingWelcome = false
+                }
+            } label: {
+                Text("开始登录")
+                    .font(.headline)
+                    .foregroundStyle(LumeColor.background)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Capsule().fill(LumeColor.primary))
+            }
+            .padding(.top, 8)
+
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+    }
+
+    private func permissionPreviewRow(icon: String, title: String, detail: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(LumeColor.primary)
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(.white.opacity(0.06)))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(LumeColor.text)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(LumeColor.textMuted.opacity(0.74))
+                    .lineLimit(2)
+            }
+            Spacer()
+        }
+        .padding(14)
+        .glassCard(cornerRadius: 18)
     }
 
     private var brandHeader: some View {

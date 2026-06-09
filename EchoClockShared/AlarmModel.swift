@@ -21,30 +21,56 @@ struct Alarm: Identifiable, Codable, Hashable, Sendable {
     var isOn: Bool
     /// 闹钟铃声
     var sound: AlarmSound
+    /// 重复周期，使用 Calendar weekday：1 周日，2 周一 ... 7 周六。
+    var repeatWeekdays: Set<Int>
 
     init(
         id: UUID = UUID(),
         wakeStartTime: Date = Alarm.defaultWakeStartTime(),
         wakeEndTime: Date = Alarm.defaultWakeEndTime(),
         isOn: Bool = false,
-        sound: AlarmSound = .aurora
+        sound: AlarmSound = .aurora,
+        repeatWeekdays: Set<Int> = Alarm.defaultRepeatWeekdays
     ) {
         self.id = id
         self.wakeStartTime = wakeStartTime
         self.wakeEndTime = wakeEndTime
         self.isOn = isOn
         self.sound = sound
+        self.repeatWeekdays = repeatWeekdays
     }
 
-    /// 默认智能唤醒开始时间：明天早上 6:30
+    enum CodingKeys: String, CodingKey {
+        case id
+        case wakeStartTime
+        case wakeEndTime
+        case isOn
+        case sound
+        case repeatWeekdays
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        wakeStartTime = try container.decode(Date.self, forKey: .wakeStartTime)
+        wakeEndTime = try container.decode(Date.self, forKey: .wakeEndTime)
+        isOn = try container.decode(Bool.self, forKey: .isOn)
+        sound = try container.decodeIfPresent(AlarmSound.self, forKey: .sound) ?? .aurora
+        repeatWeekdays = try container.decodeIfPresent(Set<Int>.self, forKey: .repeatWeekdays) ?? Alarm.defaultRepeatWeekdays
+    }
+
+    /// 默认智能唤醒开始时间：早上 7:00
     static func defaultWakeStartTime() -> Date {
-        defaultClockTime(hour: 6, minute: 30)
-    }
-
-    /// 默认智能唤醒截止时间：明天早上 7:00
-    static func defaultWakeEndTime() -> Date {
         defaultClockTime(hour: 7, minute: 0)
     }
+
+    /// 默认智能唤醒截止时间：早上 8:00
+    static func defaultWakeEndTime() -> Date {
+        defaultClockTime(hour: 8, minute: 0)
+    }
+
+    /// 默认重复：周一到周五。
+    static let defaultRepeatWeekdays: Set<Int> = [2, 3, 4, 5, 6]
 
     private static func defaultClockTime(hour: Int, minute: Int) -> Date {
         var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
@@ -138,16 +164,21 @@ extension Alarm {
 
     /// 当前是否处于智能唤醒监测窗口内
     func isInWakeWindow(at date: Date = Date()) -> Bool {
-        guard isOn else { return false }
+        guard isOn, repeats(on: date) else { return false }
         let window = resolvedWakeWindow(from: date)
         return date >= window.start && date <= window.end
     }
 
     /// 是否已经超过本次智能唤醒范围的截止时间。
     func isPastWakeDeadline(at date: Date = Date()) -> Bool {
-        guard isOn else { return false }
+        guard isOn, repeats(on: date) else { return false }
         let window = resolvedWakeWindow(from: date, rollsPastDeadline: false)
         return date >= window.end
+    }
+
+    /// 当前日期是否匹配重复规则。空重复代表仅一次，仍允许本次窗口生效。
+    func repeats(on date: Date = Date()) -> Bool {
+        repeatWeekdays.isEmpty || repeatWeekdays.contains(Calendar.current.component(.weekday, from: date))
     }
 
     /// 智能唤醒范围分钟数。
@@ -175,6 +206,16 @@ extension Alarm {
     var formattedWakeWindow: String {
         let formatter = Date.FormatStyle(date: .omitted, time: .shortened)
         return "\(wakeStartTime.formatted(formatter)) - \(wakeEndTime.formatted(formatter))"
+    }
+
+    /// 格式化重复周期。
+    var formattedRepeatText: String {
+        let weekdays = repeatWeekdays.sorted()
+        if weekdays == [2, 3, 4, 5, 6] { return "周一至周五" }
+        if weekdays == [1, 2, 3, 4, 5, 6, 7] { return "每天" }
+        if weekdays.isEmpty { return "仅一次" }
+        let labels = [1: "周日", 2: "周一", 3: "周二", 4: "周三", 5: "周四", 6: "周五", 7: "周六"]
+        return weekdays.compactMap { labels[$0] }.joined(separator: " ")
     }
 
     /// 今日（或明日）的实际截止唤醒时刻，供旧调用方兼容使用。
@@ -207,6 +248,7 @@ enum AlarmPayloadKey: String {
     case targetTime
     case isOn
     case sound
+    case repeatWeekdays
 }
 
 extension Alarm {
@@ -219,7 +261,8 @@ extension Alarm {
             AlarmPayloadKey.wakeEndTime.rawValue: wakeEndTime.timeIntervalSince1970,
             AlarmPayloadKey.targetTime.rawValue: wakeEndTime.timeIntervalSince1970,
             AlarmPayloadKey.isOn.rawValue: isOn,
-            AlarmPayloadKey.sound.rawValue: sound.rawValue
+            AlarmPayloadKey.sound.rawValue: sound.rawValue,
+            AlarmPayloadKey.repeatWeekdays.rawValue: Array(repeatWeekdays)
         ]
     }
 
@@ -233,6 +276,7 @@ extension Alarm {
 
         let soundRaw = payload[AlarmPayloadKey.sound.rawValue] as? String
         let sound = soundRaw.flatMap(AlarmSound.init(rawValue:)) ?? .aurora
+        let repeatWeekdays = payload[AlarmPayloadKey.repeatWeekdays.rawValue] as? [Int] ?? Array(Alarm.defaultRepeatWeekdays)
 
         if let startTimestamp = payload[AlarmPayloadKey.wakeStartTime.rawValue] as? TimeInterval,
            let endTimestamp = payload[AlarmPayloadKey.wakeEndTime.rawValue] as? TimeInterval {
@@ -241,7 +285,8 @@ extension Alarm {
                 wakeStartTime: Date(timeIntervalSince1970: startTimestamp),
                 wakeEndTime: Date(timeIntervalSince1970: endTimestamp),
                 isOn: isOn,
-                sound: sound
+                sound: sound,
+                repeatWeekdays: Set(repeatWeekdays)
             ).normalized()
         }
 
@@ -255,7 +300,8 @@ extension Alarm {
             wakeStartTime: startTime,
             wakeEndTime: targetTime,
             isOn: isOn,
-            sound: sound
+            sound: sound,
+            repeatWeekdays: Set(repeatWeekdays)
         ).normalized()
     }
 }

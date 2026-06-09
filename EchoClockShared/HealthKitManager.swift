@@ -101,6 +101,7 @@ final class HealthKitManager: NSObject, ObservableObject {
     /// 由 WatchConnectivity 等外部模块更新显示用的心率值
     func updateLatestHeartRate(_ bpm: Double) {
         latestHeartRate = bpm
+        isUsingMockData = false
         heartRateSourceDescription = "Apple Watch 回传"
     }
 
