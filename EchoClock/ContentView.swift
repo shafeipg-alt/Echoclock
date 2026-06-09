@@ -159,36 +159,29 @@ struct ContentView: View {
             }
 
             Section {
-                if viewModel.alarms.isEmpty {
-                    emptyAlarmCard
-                        .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 16, trailing: 24))
+                ForEach(viewModel.alarms) { alarm in
+                    alarmCard(alarm)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 14, trailing: 24))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
-                } else {
-                    ForEach(viewModel.alarms) { alarm in
-                        alarmCard(alarm)
-                            .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 14, trailing: 24))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        viewModel.deleteAlarm(alarm)
-                                    }
-                                } label: {
-                                    Label("删除", systemImage: "trash.fill")
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    viewModel.deleteAlarm(alarm)
                                 }
+                            } label: {
+                                Label("删除", systemImage: "trash.fill")
                             }
-                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        viewModel.deleteAlarm(alarm)
-                                    }
-                                } label: {
-                                    Label("删除", systemImage: "trash.fill")
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    viewModel.deleteAlarm(alarm)
                                 }
+                            } label: {
+                                Label("删除", systemImage: "trash.fill")
                             }
-                    }
+                        }
                 }
             }
 
@@ -263,26 +256,6 @@ struct ContentView: View {
             .padding(18)
             .glassCard(cornerRadius: 22)
         }
-    }
-
-    private var emptyAlarmCard: some View {
-        VStack(spacing: 15) {
-            Image(systemName: "alarm")
-                .font(.title2)
-                .foregroundStyle(LumeColor.primary)
-                .frame(width: 52, height: 52)
-                .background(Circle().fill(LumeColor.primary.opacity(0.12)))
-            Text("还没有闹钟")
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(LumeColor.text)
-            Text("点击上方添加入口，创建第一个智能唤醒闹钟。")
-                .font(.caption)
-                .foregroundStyle(LumeColor.textMuted)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(24)
-        .glassCard(cornerRadius: 24)
     }
 
     private func alarmCard(_ alarm: Alarm) -> some View {
@@ -880,10 +853,6 @@ struct ContentView: View {
 
             sheetActionButton(title: viewModel.alarm.isOn ? "停止智能闹钟" : "开启智能闹钟", icon: viewModel.alarm.isOn ? "stop.fill" : "play.fill") {
                 viewModel.toggleAlarm()
-            }
-
-            sheetActionButton(title: "套用工作日 08:15", icon: "calendar.badge.clock") {
-                viewModel.applyPresetWakeWindow(startHour: 7, startMinute: 45, endHour: 8, endMinute: 15)
             }
         }
     }

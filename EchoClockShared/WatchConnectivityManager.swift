@@ -41,6 +41,8 @@ final class WatchConnectivityManager: NSObject, ObservableObject {
     var onAlarmDismissed: (() -> Void)?
     /// iPhone 端：收到 Watch 端握手回应
     var onWearablePong: (() -> Void)?
+    /// iPhone 端：收到 Apple Watch 回传的真实心率
+    var onHeartRateUpdate: ((HeartRateSample) -> Void)?
 
     private var sessionDelegateHandler: SessionDelegateHandler?
 
@@ -197,7 +199,9 @@ final class WatchConnectivityManager: NSObject, ObservableObject {
 
         case .heartRateUpdate:
             if let bpm = payload["bpm"] as? Double {
+                let sample = HeartRateSample(beatsPerMinute: bpm, timestamp: Date())
                 HealthKitManager.shared.updateLatestHeartRate(bpm)
+                onHeartRateUpdate?(sample)
             }
 
         case .wearablePing:

@@ -56,7 +56,7 @@ final class AlarmViewModel: ObservableObject {
     /// 申请 HealthKit 权限并更新状态
     func requestPermissions() async {
         let granted = await HealthKitManager.shared.requestHealthKitAuthorization()
-        healthAuthStatus = granted ? "已授权" : "使用模拟数据"
+        healthAuthStatus = granted ? "已授权" : "等待授权"
     }
 
     // MARK: - 闹钟控制
@@ -287,6 +287,11 @@ final class AlarmViewModel: ObservableObject {
                 self?.wearableSignalStatus = "Watch 已响应"
             }
         }
+        wc.onHeartRateUpdate = { sample in
+            Task { @MainActor in
+                SleepAnalyzer.shared.processHeartRateSample(sample)
+            }
+        }
         wc.onStopMonitoring = { [weak self] in
             Task { @MainActor [weak self] in
                 self?.alarm.isOn = false
@@ -425,7 +430,7 @@ final class AlarmViewModel: ObservableObject {
     }
 
     private func updateHeartRateQuality() {
-        guard latestHeartRate > 0, !HealthKitManager.shared.isUsingMockData else {
+        guard latestHeartRate > 0, heartRateSourceStatus.contains("Apple Watch") else {
             heartRateQualityScore = nil
             recentHeartRates.removeAll()
             return
