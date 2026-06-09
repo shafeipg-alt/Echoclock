@@ -22,14 +22,14 @@ final class AlarmSoundService: ObservableObject {
     private init() {}
 
     /// 开始响铃（循环播放系统闹钟音）
-    func startRinging() {
+    func startRinging(sound: AlarmSound = .aurora) {
         guard !isRinging else { return }
         isRinging = true
         configureAudioSession()
-        playAlarmSound()
+        playAlarmSound(sound)
         ringTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.playAlarmSound()
+                self?.playAlarmSound(sound)
             }
         }
     }
@@ -51,9 +51,13 @@ final class AlarmSoundService: ObservableObject {
         }
     }
 
-    private func playAlarmSound() {
-        // 系统闹钟提示音 ID
-        AudioServicesPlaySystemSound(1005)
+    func preview(sound: AlarmSound) {
+        configureAudioSession()
+        playAlarmSound(sound)
+    }
+
+    private func playAlarmSound(_ sound: AlarmSound) {
+        AudioServicesPlaySystemSound(sound.systemSoundID)
         AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
     }
 }

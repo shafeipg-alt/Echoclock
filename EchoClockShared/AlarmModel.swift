@@ -19,17 +19,21 @@ struct Alarm: Identifiable, Codable, Hashable, Sendable {
     var wakeEndTime: Date
     /// 闹钟是否已开启
     var isOn: Bool
+    /// 闹钟铃声
+    var sound: AlarmSound
 
     init(
         id: UUID = UUID(),
         wakeStartTime: Date = Alarm.defaultWakeStartTime(),
         wakeEndTime: Date = Alarm.defaultWakeEndTime(),
-        isOn: Bool = false
+        isOn: Bool = false,
+        sound: AlarmSound = .aurora
     ) {
         self.id = id
         self.wakeStartTime = wakeStartTime
         self.wakeEndTime = wakeEndTime
         self.isOn = isOn
+        self.sound = sound
     }
 
     /// 默认智能唤醒开始时间：明天早上 6:30
@@ -53,6 +57,46 @@ struct Alarm: Identifiable, Codable, Hashable, Sendable {
             return Calendar.current.date(byAdding: .day, value: 1, to: today) ?? today
         }
         return today
+    }
+}
+
+// MARK: - 预设铃声
+
+enum AlarmSound: String, CaseIterable, Codable, Hashable, Sendable {
+    case aurora
+    case chime
+    case pulse
+    case rise
+    case classic
+
+    var displayName: String {
+        switch self {
+        case .aurora: return "晨雾 Aurora"
+        case .chime: return "清铃 Chime"
+        case .pulse: return "柔波 Pulse"
+        case .rise: return "渐醒 Rise"
+        case .classic: return "经典 Classic"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .aurora: return "轻柔、适合浅睡眠唤醒"
+        case .chime: return "清脆、适合普通早起"
+        case .pulse: return "短促节奏、适合深睡兜底"
+        case .rise: return "逐步增强、适合自然醒"
+        case .classic: return "传统提示音、穿透力较强"
+        }
+    }
+
+    var systemSoundID: UInt32 {
+        switch self {
+        case .aurora: return 1005
+        case .chime: return 1007
+        case .pulse: return 1016
+        case .rise: return 1022
+        case .classic: return 1000
+        }
     }
 }
 
@@ -162,6 +206,7 @@ enum AlarmPayloadKey: String {
     case wakeEndTime
     case targetTime
     case isOn
+    case sound
 }
 
 extension Alarm {
@@ -173,7 +218,8 @@ extension Alarm {
             AlarmPayloadKey.wakeStartTime.rawValue: wakeStartTime.timeIntervalSince1970,
             AlarmPayloadKey.wakeEndTime.rawValue: wakeEndTime.timeIntervalSince1970,
             AlarmPayloadKey.targetTime.rawValue: wakeEndTime.timeIntervalSince1970,
-            AlarmPayloadKey.isOn.rawValue: isOn
+            AlarmPayloadKey.isOn.rawValue: isOn,
+            AlarmPayloadKey.sound.rawValue: sound.rawValue
         ]
     }
 
@@ -185,13 +231,17 @@ extension Alarm {
             let isOn = payload[AlarmPayloadKey.isOn.rawValue] as? Bool
         else { return nil }
 
+        let soundRaw = payload[AlarmPayloadKey.sound.rawValue] as? String
+        let sound = soundRaw.flatMap(AlarmSound.init(rawValue:)) ?? .aurora
+
         if let startTimestamp = payload[AlarmPayloadKey.wakeStartTime.rawValue] as? TimeInterval,
            let endTimestamp = payload[AlarmPayloadKey.wakeEndTime.rawValue] as? TimeInterval {
             return Alarm(
                 id: id,
                 wakeStartTime: Date(timeIntervalSince1970: startTimestamp),
                 wakeEndTime: Date(timeIntervalSince1970: endTimestamp),
-                isOn: isOn
+                isOn: isOn,
+                sound: sound
             ).normalized()
         }
 
@@ -204,7 +254,8 @@ extension Alarm {
             id: id,
             wakeStartTime: startTime,
             wakeEndTime: targetTime,
-            isOn: isOn
+            isOn: isOn,
+            sound: sound
         ).normalized()
     }
 }
@@ -218,4 +269,6 @@ enum WCMessageType: String, Sendable {
     case smartWakeTriggered = "smart_wake_triggered"
     case alarmDismissed = "alarm_dismissed"
     case heartRateUpdate = "heart_rate_update"
+    case wearablePing = "wearable_ping"
+    case wearablePong = "wearable_pong"
 }

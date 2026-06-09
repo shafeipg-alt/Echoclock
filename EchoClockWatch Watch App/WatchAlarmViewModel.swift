@@ -23,11 +23,13 @@ final class WatchAlarmViewModel: ObservableObject {
     init() {
         setupConnectivityCallbacks()
         observeHealthKit()
+        WatchConnectivityManager.shared.sendWearablePong()
     }
 
     func requestPermissions() async {
         _ = await HealthKitManager.shared.requestHealthKitAuthorization()
         isUsingMockData = HealthKitManager.shared.isUsingMockData
+        WatchConnectivityManager.shared.sendWearablePong()
     }
 
     private func setupConnectivityCallbacks() {
@@ -77,6 +79,7 @@ final class WatchAlarmViewModel: ObservableObject {
     }
 
     private func handleAlarmUpdate(_ receivedAlarm: Alarm) {
+        WatchConnectivityManager.shared.sendWearablePong()
         alarm = receivedAlarm.normalized()
         if alarm.isOn {
             startMonitoring()

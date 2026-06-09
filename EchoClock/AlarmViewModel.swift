@@ -27,10 +27,14 @@ final class AlarmViewModel: ObservableObject {
     @Published var latestHeartRate: Double = 0
     /// 睡眠监测状态
     @Published var monitoringStatus: String = "待机中"
+    /// 最近一次收到 Watch 端信号的描述
+    @Published var wearableSignalStatus: String = "等待手表信号"
 
     private var clockTimer: Timer?
+    private let alarmStorageKey = "EchoClock.alarm"
 
     init() {
+        loadAlarm()
         setupConnectivityCallbacks()
         startClock()
     }
@@ -48,6 +52,7 @@ final class AlarmViewModel: ObservableObject {
     /// 切换闹钟开关
     func toggleAlarm() {
         alarm.isOn.toggle()
+        saveAlarm()
         if alarm.isOn {
             activateAlarm()
         } else {
@@ -64,6 +69,7 @@ final class AlarmViewModel: ObservableObject {
     func updateWakeStartTime(_ newTime: Date) {
         alarm.wakeStartTime = newTime
         alarm = alarm.normalized()
+        saveAlarm()
         if alarm.isOn {
             syncToWatch()
         }
@@ -73,6 +79,7 @@ final class AlarmViewModel: ObservableObject {
     func updateWakeEndTime(_ newTime: Date) {
         alarm.wakeEndTime = newTime
         alarm = alarm.normalized()
+        saveAlarm()
         if alarm.isOn {
             syncToWatch()
         }
@@ -81,7 +88,33 @@ final class AlarmViewModel: ObservableObject {
     /// 更新智能唤醒窗口（分钟）
     func updateWindowMinutes(_ minutes: Int) {
         alarm.wakeEndTime = Calendar.current.date(byAdding: .minute, value: minutes, to: alarm.wakeStartTime) ?? alarm.wakeEndTime
+        saveAlarm()
         if alarm.isOn {
+            syncToWatch()
+        }
+    }
+
+    /// 更新预设铃声
+    func updateSound(_ sound: AlarmSound) {
+        alarm.sound = sound
+        saveAlarm()
+        if alarm.isOn {
+            syncToWatch()
+        }
+    }
+
+    /// 预览当前铃声
+    func previewSelectedSound() {
+        AlarmSoundService.shared.preview(sound: alarm.sound)
+    }
+
+    /// 主动探测 Watch App 是否在线。
+    func connectWearable() {
+        wearableSignalStatus = "正在连接 Watch..."
+        WatchConnectivityManager.shared.sendWearablePing()
+        if alarm.isOn {
+            WatchConnectivityManager.shared.sendStartMonitoring(alarm: alarm)
+        } else {
             syncToWatch()
         }
     }
@@ -99,6 +132,7 @@ final class AlarmViewModel: ObservableObject {
 
     private func activateAlarm() {
         alarm = alarm.normalized()
+        saveAlarm()
         syncToWatch()
         WatchConnectivityManager.shared.sendStartMonitoring(alarm: alarm)
         startHeartRateMonitoringIfNeeded()
@@ -132,7 +166,7 @@ final class AlarmViewModel: ObservableObject {
     private func triggerAlarmFromPhone() {
         guard !isAlarmRinging else { return }
         isAlarmRinging = true
-        AlarmSoundService.shared.startRinging()
+        AlarmSoundService.shared.startRinging(sound: alarm.sound)
     }
 
     private func setupConnectivityCallbacks() {
@@ -146,6 +180,11 @@ final class AlarmViewModel: ObservableObject {
             Task { @MainActor [weak self] in
                 self?.isAlarmRinging = false
                 AlarmSoundService.shared.stopRinging()
+            }
+        }
+        wc.onWearablePong = { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.wearableSignalStatus = "Watch 已响应"
             }
         }
         wc.onStopMonitoring = { [weak self] in
@@ -165,6 +204,7 @@ final class AlarmViewModel: ObservableObject {
                 self.updateWatchStatus()
                 self.latestHeartRate = HealthKitManager.shared.latestHeartRate
                 self.monitoringStatus = Self.statusText(for: SleepAnalyzer.shared.state)
+                self.updateWearableSignalStatus()
             }
         }
     }
@@ -184,12 +224,43 @@ final class AlarmViewModel: ObservableObject {
             watchStatus = "未配对 Apple Watch"
         } else if !wc.isWatchAppInstalled {
             watchStatus = "Watch App 未安装"
-        } else if wc.isSessionActivated && wc.isReachable {
+        } else if wc.isSessionActivated && (wc.isReachable || isRecentWearableSignal) {
             watchStatus = "Watch 已连接"
         } else if wc.isSessionActivated {
-            watchStatus = "Watch 已配对"
+            watchStatus = "已配对，等待手表 App"
         } else {
             watchStatus = "等待 Watch 连接"
         }
+    }
+
+    private var isRecentWearableSignal: Bool {
+        guard let date = WatchConnectivityManager.shared.lastWearableSignalAt else { return false }
+        return Date().timeIntervalSince(date) < 120
+    }
+
+    private func updateWearableSignalStatus() {
+        guard let date = WatchConnectivityManager.shared.lastWearableSignalAt else {
+            wearableSignalStatus = "尚未收到 Watch 信号"
+            return
+        }
+        let seconds = Int(Date().timeIntervalSince(date))
+        if seconds < 3 {
+            wearableSignalStatus = "刚收到 Watch 信号"
+        } else if seconds < 120 {
+            wearableSignalStatus = "\(seconds) 秒前收到 Watch 信号"
+        } else {
+            wearableSignalStatus = "Watch 信号已超时"
+        }
+    }
+
+    private func loadAlarm() {
+        guard let data = UserDefaults.standard.data(forKey: alarmStorageKey),
+              let savedAlarm = try? JSONDecoder().decode(Alarm.self, from: data) else { return }
+        alarm = savedAlarm.normalized()
+    }
+
+    private func saveAlarm() {
+        guard let data = try? JSONEncoder().encode(alarm) else { return }
+        UserDefaults.standard.set(data, forKey: alarmStorageKey)
     }
 }

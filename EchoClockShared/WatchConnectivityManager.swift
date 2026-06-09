@@ -26,6 +26,8 @@ final class WatchConnectivityManager: NSObject, ObservableObject {
     @Published private(set) var isWatchAppInstalled: Bool = false
     /// 从对端接收到的最新闹钟配置
     @Published var receivedAlarm: Alarm?
+    /// 最近一次收到对端信号的时间（心率、握手或实时消息）
+    @Published private(set) var lastWearableSignalAt: Date?
 
     /// iPhone 端：收到 Watch 发来的智能唤醒通知
     var onSmartWakeTriggered: (() -> Void)?
@@ -37,6 +39,8 @@ final class WatchConnectivityManager: NSObject, ObservableObject {
     var onStopMonitoring: (() -> Void)?
     /// 任一端：收到闹钟关闭通知
     var onAlarmDismissed: (() -> Void)?
+    /// iPhone 端：收到 Watch 端握手回应
+    var onWearablePong: (() -> Void)?
 
     private var sessionDelegateHandler: SessionDelegateHandler?
 
@@ -65,6 +69,11 @@ final class WatchConnectivityManager: NSObject, ObservableObject {
         isSessionActivated = isActivated
         self.isReachable = isReachable
         refreshWearableStatus(session: WCSession.default)
+        #if os(watchOS)
+        if isActivated {
+            sendWearablePong()
+        }
+        #endif
     }
 
     private func refreshWearableStatus(session: WCSession) {
@@ -119,6 +128,22 @@ final class WatchConnectivityManager: NSObject, ObservableObject {
         ])
     }
 
+    /// iPhone → Watch：主动探测可穿戴端是否在线。
+    func sendWearablePing() {
+        sendPayload([
+            AlarmPayloadKey.type.rawValue: WCMessageType.wearablePing.rawValue,
+            "sentAt": Date().timeIntervalSince1970
+        ])
+    }
+
+    /// Watch → iPhone：回应在线状态。
+    func sendWearablePong() {
+        sendPayload([
+            AlarmPayloadKey.type.rawValue: WCMessageType.wearablePong.rawValue,
+            "sentAt": Date().timeIntervalSince1970
+        ])
+    }
+
     private func sendPayload(_ payload: [String: Any]) {
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
@@ -144,6 +169,8 @@ final class WatchConnectivityManager: NSObject, ObservableObject {
     fileprivate func handleReceivedPayload(_ payload: [String: Any]) {
         guard let typeRaw = payload[AlarmPayloadKey.type.rawValue] as? String,
               let type = WCMessageType(rawValue: typeRaw) else { return }
+
+        lastWearableSignalAt = Date()
 
         switch type {
         case .alarmConfig:
@@ -172,6 +199,12 @@ final class WatchConnectivityManager: NSObject, ObservableObject {
             if let bpm = payload["bpm"] as? Double {
                 HealthKitManager.shared.updateLatestHeartRate(bpm)
             }
+
+        case .wearablePing:
+            sendWearablePong()
+
+        case .wearablePong:
+            onWearablePong?()
         }
     }
 }
