@@ -286,7 +286,10 @@ struct ContentView: View {
                     }
                 } label: {
                     toggleSwitch(isOn: alarm.isOn)
+                        .padding(10)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel(alarm.isOn ? "关闭智能闹钟" : "开启智能闹钟")
             }
 
@@ -341,17 +344,20 @@ struct ContentView: View {
     }
 
     private var sleepBentoGrid: some View {
-        Group {
-            if let score = viewModel.heartRateQualityScore, viewModel.latestHeartRate > 0 {
+        VStack(spacing: 14) {
+            if let score = viewModel.heartRateQualityScore, hasWatchHeartRate {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                     bentoMetricCard(icon: "checkmark.seal.fill", title: "数据质量", value: "\(score)", suffix: "分", accent: LumeColor.secondary, progress: Double(score) / 100.0)
                         .onTapGesture { activeSheet = .heartRateSettings }
                     heartRateBentoCard
                         .onTapGesture { selectedDashboardTab = .sleep }
                 }
-                .padding(.top, 12)
+            } else {
+                heartRateBentoCard
+                    .onTapGesture { activeSheet = .heartRateSettings }
             }
         }
+        .padding(.top, 12)
     }
 
     private func bentoMetricCard(icon: String, title: String, value: String, suffix: String, accent: Color, progress: Double) -> some View {
@@ -402,20 +408,31 @@ struct ContentView: View {
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text("\(Int(viewModel.latestHeartRate))")
-                    .font(.title2.weight(.bold))
+                Text(hasWatchHeartRate ? "\(Int(viewModel.latestHeartRate))" : "等待")
+                    .font(hasWatchHeartRate ? .title2.weight(.bold) : .headline.weight(.semibold))
                     .foregroundStyle(LumeColor.text)
-                Text("BPM")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(LumeColor.textMuted)
+                if hasWatchHeartRate {
+                    Text("BPM")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(LumeColor.textMuted)
+                }
             }
 
-            HeartRateSparkline(samples: viewModel.recentHeartRates)
+            Text(hasWatchHeartRate ? viewModel.heartRateSourceStatus : viewModel.watchStatus)
+                .font(.caption2)
+                .foregroundStyle(LumeColor.textMuted.opacity(0.72))
+                .lineLimit(1)
+
+            HeartRateSparkline(samples: hasWatchHeartRate ? viewModel.recentHeartRates : [])
                 .frame(height: 34)
         }
-        .frame(height: 126)
+        .frame(height: 148)
         .padding(18)
         .glassCard(cornerRadius: 24)
+    }
+
+    private var hasWatchHeartRate: Bool {
+        viewModel.latestHeartRate > 0 && viewModel.heartRateSourceStatus.contains("Apple Watch")
     }
 
     private var sleepMonitorPage: some View {
@@ -1949,6 +1966,11 @@ private struct HeartRateSparkline: View {
     var body: some View {
         TimelineView(.animation) { timeline in
             Canvas { context, size in
+                if samples.isEmpty {
+                    drawWaitingLine(in: size, context: &context, date: timeline.date)
+                    return
+                }
+
                 let values = normalizedSamples
                 guard values.count > 1 else { return }
 
@@ -1975,10 +1997,24 @@ private struct HeartRateSparkline: View {
     }
 
     private var normalizedSamples: [Double] {
-        let source = samples.isEmpty ? [58, 59, 57, 60, 61, 60] : samples
-        guard let minValue = source.min(), let maxValue = source.max() else { return source }
+        guard let minValue = samples.min(), let maxValue = samples.max() else { return samples }
         let range = max(1, maxValue - minValue)
-        return source.map { ($0 - minValue) / range * 0.72 + 0.14 }
+        return samples.map { ($0 - minValue) / range * 0.72 + 0.14 }
+    }
+
+    private func drawWaitingLine(in size: CGSize, context: inout GraphicsContext, date: Date) {
+        var baseline = Path()
+        let y = size.height * 0.55
+        baseline.move(to: CGPoint(x: 0, y: y))
+        baseline.addLine(to: CGPoint(x: size.width, y: y))
+        context.stroke(baseline, with: .color(LumeColor.textMuted.opacity(0.22)), style: StrokeStyle(lineWidth: 1.4, lineCap: .round, dash: [5, 7]))
+
+        let progress = (sin(date.timeIntervalSinceReferenceDate * 1.6) + 1) / 2
+        let x = size.width * CGFloat(progress)
+        var marker = Path()
+        marker.move(to: CGPoint(x: x, y: y - 10))
+        marker.addLine(to: CGPoint(x: x, y: y + 10))
+        context.stroke(marker, with: .color(LumeColor.primary.opacity(0.65)), style: StrokeStyle(lineWidth: 2, lineCap: .round))
     }
 }
 
