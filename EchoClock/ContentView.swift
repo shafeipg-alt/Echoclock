@@ -116,27 +116,6 @@ struct ContentView: View {
                 bottomNavigationBar
             }
 
-            if selectedDashboardTab == .alarm {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Button {
-                            showRangePicker = true
-                        } label: {
-                            Image(systemName: "plus")
-                                .font(.title3.weight(.bold))
-                                .foregroundStyle(LumeColor.background)
-                                .frame(width: 56, height: 56)
-                                .background(Circle().fill(LumeColor.primary))
-                                .shadow(color: LumeColor.primary.opacity(0.38), radius: 24, y: 8)
-                        }
-                        .padding(.trailing, 24)
-                        .padding(.bottom, 94)
-                    }
-                }
-            }
-
             if viewModel.isAlarmRinging {
                 ringingOverlay
             }
@@ -166,17 +145,53 @@ struct ContentView: View {
     }
 
     private var alarmHomePage: some View {
-        ScrollView {
-            VStack(spacing: 16) {
+        List {
+            Section {
                 pageTitle("闹钟", subtitle: "专注恢复，活力每一天")
-                smartAlarmListCard
-                regularAlarmCard
-                sleepBentoGrid
+                    .listRowInsets(EdgeInsets(top: 28, leading: 24, bottom: 8, trailing: 24))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
+                addAlarmEntry
+                    .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 16, trailing: 24))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 28)
-            .padding(.bottom, 122)
+
+            Section {
+                if viewModel.alarms.isEmpty {
+                    emptyAlarmCard
+                        .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 16, trailing: 24))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                } else {
+                    ForEach(viewModel.alarms) { alarm in
+                        alarmCard(alarm)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 14, trailing: 24))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        viewModel.deleteAlarm(alarm)
+                                    }
+                                } label: {
+                                    Label("删除", systemImage: "trash.fill")
+                                }
+                            }
+                    }
+                }
+            }
+
+            Section {
+                sleepBentoGrid
+                    .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 122, trailing: 24))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .scrollIndicators(.hidden)
         .background(appBackground)
     }
@@ -205,46 +220,100 @@ struct ContentView: View {
         }
     }
 
-    private var smartAlarmListCard: some View {
+    private var addAlarmEntry: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                _ = viewModel.addAlarm()
+            }
+            activeSheet = .alarmEditor
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "plus")
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(LumeColor.background)
+                    .frame(width: 42, height: 42)
+                    .background(Circle().fill(LumeColor.primary))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("添加智能闹钟")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(LumeColor.text)
+                    Text("设置唤醒范围、铃声和 Apple Watch 心率监测")
+                        .font(.caption)
+                        .foregroundStyle(LumeColor.textMuted.opacity(0.78))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(LumeColor.textMuted.opacity(0.48))
+            }
+            .padding(18)
+            .glassCard(cornerRadius: 22)
+        }
+    }
+
+    private var emptyAlarmCard: some View {
+        VStack(spacing: 15) {
+            Image(systemName: "alarm")
+                .font(.title2)
+                .foregroundStyle(LumeColor.primary)
+                .frame(width: 52, height: 52)
+                .background(Circle().fill(LumeColor.primary.opacity(0.12)))
+            Text("还没有闹钟")
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(LumeColor.text)
+            Text("点击上方添加入口，创建第一个智能唤醒闹钟。")
+                .font(.caption)
+                .foregroundStyle(LumeColor.textMuted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(24)
+        .glassCard(cornerRadius: 24)
+    }
+
+    private func alarmCard(_ alarm: Alarm) -> some View {
         VStack(spacing: 15) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 7) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(viewModel.alarm.formattedWakeEndTime)
+                        Text(alarm.formattedWakeEndTime)
                             .font(.system(size: 42, weight: .bold, design: .rounded))
                             .foregroundStyle(LumeColor.text)
                             .monospacedDigit()
-                        Text("AM")
+                        Text(dayPeriodText(for: alarm.wakeEndTime))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(LumeColor.textMuted)
                     }
 
-                    Text("智能唤醒: \(viewModel.alarm.formattedWakeWindow)")
+                    Text("智能唤醒: \(alarm.formattedWakeWindow)")
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(LumeColor.primaryBright)
+                        .foregroundStyle(alarm.isOn ? LumeColor.primaryBright : LumeColor.textMuted)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(Capsule().fill(LumeColor.primary.opacity(0.16)))
+                        .background(Capsule().fill(alarm.isOn ? LumeColor.primary.opacity(0.16) : LumeColor.surfaceHigh.opacity(0.55)))
                 }
-
                 Spacer()
-
                 Button {
                     withAnimation(.easeInOut(duration: 0.25)) {
-                        viewModel.toggleAlarm()
+                        viewModel.toggleAlarm(alarm)
                     }
                 } label: {
-                    toggleSwitch(isOn: viewModel.alarm.isOn)
+                    toggleSwitch(isOn: alarm.isOn)
                 }
-                .accessibilityLabel(viewModel.alarm.isOn ? "关闭智能闹钟" : "开启智能闹钟")
+                .accessibilityLabel(alarm.isOn ? "关闭智能闹钟" : "开启智能闹钟")
             }
 
             HStack {
-                Text("每天")
+                Text(alarm.isOn ? "监测中" : "未开启")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(viewModel.alarm.isOn ? LumeColor.primary : LumeColor.textMuted)
+                    .foregroundStyle(alarm.isOn ? LumeColor.primary : LumeColor.textMuted)
                 Spacer()
-                Text(viewModel.alarm.isOn ? viewModel.monitoringStatus : "点击开启，自动同步 Apple Watch")
+                Text(alarm.isOn ? activeAlarmStatus(for: alarm) : "点击卡片编辑")
                     .font(.caption2)
                     .foregroundStyle(LumeColor.textMuted.opacity(0.72))
                     .lineLimit(1)
@@ -254,56 +323,21 @@ struct ContentView: View {
             }
         }
         .padding(24)
-        .opacity(viewModel.alarm.isOn ? 1 : 0.58)
+        .opacity(alarm.isOn ? 1 : 0.62)
         .glassCard(cornerRadius: 28)
         .contentShape(RoundedRectangle(cornerRadius: 28))
         .onTapGesture {
+            viewModel.selectAlarm(alarm)
             activeSheet = .alarmEditor
         }
     }
 
-    private var regularAlarmCard: some View {
-        VStack(spacing: 15) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("08:15")
-                            .font(.system(size: 42, weight: .bold, design: .rounded))
-                            .foregroundStyle(LumeColor.text.opacity(0.86))
-                            .monospacedDigit()
-                        Text("AM")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(LumeColor.textMuted)
-                    }
-                    Text("常规闹钟")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(LumeColor.textMuted)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(LumeColor.surfaceHigh.opacity(0.55)))
-                }
-                Spacer()
-                toggleSwitch(isOn: false)
-            }
+    private func dayPeriodText(for date: Date) -> String {
+        Calendar.current.component(.hour, from: date) < 12 ? "AM" : "PM"
+    }
 
-            HStack {
-                Text("周一 至 周五")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(LumeColor.textMuted)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(LumeColor.textMuted.opacity(0.45))
-            }
-        }
-        .padding(24)
-        .opacity(0.58)
-        .glassCard(cornerRadius: 28)
-        .contentShape(RoundedRectangle(cornerRadius: 28))
-        .onTapGesture {
-            viewModel.applyPresetWakeWindow(startHour: 7, startMinute: 45, endHour: 8, endMinute: 15)
-            notice = Notice(title: "已套用常规闹钟", message: "已将智能唤醒范围设为 07:45 - 08:15，并开启监测。")
-        }
+    private func activeAlarmStatus(for alarm: Alarm) -> String {
+        alarm.id == viewModel.alarm.id ? viewModel.monitoringStatus : "已开启，等待同步"
     }
 
     private func toggleSwitch(isOn: Bool) -> some View {

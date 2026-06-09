@@ -15,6 +15,8 @@ import SwiftUI
 final class AlarmViewModel: ObservableObject {
     /// 当前闹钟配置
     @Published var alarm: Alarm = Alarm()
+    /// 用户创建的闹钟列表
+    @Published private(set) var alarms: [Alarm] = []
     /// 实时时钟显示
     @Published var currentTime: Date = Date()
     /// 是否正在响铃
@@ -36,6 +38,7 @@ final class AlarmViewModel: ObservableObject {
 
     private var clockTimer: Timer?
     private let alarmStorageKey = "EchoClock.alarm"
+    private let alarmsStorageKey = "EchoClock.alarms"
 
     init() {
         loadAlarm()
@@ -56,12 +59,60 @@ final class AlarmViewModel: ObservableObject {
     /// 切换闹钟开关
     func toggleAlarm() {
         alarm.isOn.toggle()
+        if alarm.isOn {
+            alarms = alarms.map { item in
+                var copy = item
+                copy.isOn = item.id == alarm.id
+                return copy
+            }
+        }
         saveAlarm()
         if alarm.isOn {
             activateAlarm()
         } else {
             deactivateAlarm()
         }
+    }
+
+    /// 选中一个闹钟用于编辑或控制。
+    func selectAlarm(_ selectedAlarm: Alarm) {
+        alarm = selectedAlarm.normalized()
+    }
+
+    /// 新增一个闹钟，并将其设为当前编辑对象。
+    @discardableResult
+    func addAlarm() -> Alarm {
+        let offsetMinutes = min(alarms.count, 4) * 15
+        let startTime = Calendar.current.date(byAdding: .minute, value: offsetMinutes, to: Alarm.defaultWakeStartTime()) ?? Alarm.defaultWakeStartTime()
+        let endTime = Calendar.current.date(byAdding: .minute, value: offsetMinutes, to: Alarm.defaultWakeEndTime()) ?? Alarm.defaultWakeEndTime()
+        let newAlarm = Alarm(wakeStartTime: startTime, wakeEndTime: endTime, isOn: false, sound: alarm.sound).normalized()
+        alarms.append(newAlarm)
+        alarm = newAlarm
+        persistAlarmState()
+        return newAlarm
+    }
+
+    /// 删除一个闹钟。若删除的是正在监测的闹钟，会同步停止监测。
+    func deleteAlarm(_ targetAlarm: Alarm) {
+        let wasCurrent = alarm.id == targetAlarm.id
+        let shouldStopMonitoring = targetAlarm.isOn
+        alarms.removeAll { $0.id == targetAlarm.id }
+
+        if shouldStopMonitoring {
+            deactivateAlarm()
+        }
+
+        if wasCurrent {
+            alarm = alarms.first ?? Alarm(isOn: false)
+        }
+
+        persistAlarmState()
+    }
+
+    /// 切换指定闹钟。
+    func toggleAlarm(_ targetAlarm: Alarm) {
+        selectAlarm(targetAlarm)
+        toggleAlarm()
     }
 
     /// 更新目标唤醒时间
@@ -98,7 +149,7 @@ final class AlarmViewModel: ObservableObject {
         }
     }
 
-    /// 应用一个常用闹钟预设，当前产品只维护一个智能闹钟配置。
+    /// 应用一个常用闹钟预设。
     func applyPresetWakeWindow(startHour: Int, startMinute: Int, endHour: Int, endMinute: Int, turnOn: Bool = true) {
         alarm.wakeStartTime = Self.clockTime(hour: startHour, minute: startMinute)
         alarm.wakeEndTime = Self.clockTime(hour: endHour, minute: endMinute)
@@ -106,6 +157,11 @@ final class AlarmViewModel: ObservableObject {
         saveAlarm()
         if turnOn && !alarm.isOn {
             alarm.isOn = true
+            alarms = alarms.map { item in
+                var copy = item
+                copy.isOn = item.id == alarm.id
+                return copy
+            }
             saveAlarm()
             activateAlarm()
         } else if alarm.isOn {
@@ -209,6 +265,7 @@ final class AlarmViewModel: ObservableObject {
         wc.onStopMonitoring = { [weak self] in
             Task { @MainActor [weak self] in
                 self?.alarm.isOn = false
+                self?.saveAlarm()
                 self?.deactivateAlarm()
             }
         }
@@ -287,13 +344,39 @@ final class AlarmViewModel: ObservableObject {
     }
 
     private func loadAlarm() {
+        let decoder = JSONDecoder()
+        if let data = UserDefaults.standard.data(forKey: alarmsStorageKey),
+           let savedAlarms = try? decoder.decode([Alarm].self, from: data) {
+            alarms = savedAlarms.map { $0.normalized() }
+            alarm = alarms.first(where: \.isOn) ?? alarms.first ?? Alarm()
+            return
+        }
+
         guard let data = UserDefaults.standard.data(forKey: alarmStorageKey),
-              let savedAlarm = try? JSONDecoder().decode(Alarm.self, from: data) else { return }
+              let savedAlarm = try? decoder.decode(Alarm.self, from: data) else { return }
         alarm = savedAlarm.normalized()
+        alarms = [alarm]
+        persistAlarmState()
     }
 
     private func saveAlarm() {
+        upsertCurrentAlarm()
+        persistAlarmState()
+    }
+
+    private func upsertCurrentAlarm() {
+        alarm = alarm.normalized()
+        if let index = alarms.firstIndex(where: { $0.id == alarm.id }) {
+            alarms[index] = alarm
+        } else {
+            alarms.append(alarm)
+        }
+    }
+
+    private func persistAlarmState() {
         guard let data = try? JSONEncoder().encode(alarm) else { return }
         UserDefaults.standard.set(data, forKey: alarmStorageKey)
+        guard let alarmsData = try? JSONEncoder().encode(alarms) else { return }
+        UserDefaults.standard.set(alarmsData, forKey: alarmsStorageKey)
     }
 }
