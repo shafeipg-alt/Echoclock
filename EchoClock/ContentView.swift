@@ -128,14 +128,13 @@ struct ContentView: View {
     private var alarmHomePage: some View {
         ScrollView {
             VStack(spacing: 16) {
-                lumeTopBar
                 pageTitle("闹钟", subtitle: "专注恢复，活力每一天")
                 smartAlarmListCard
                 regularAlarmCard
                 sleepBentoGrid
             }
             .padding(.horizontal, 24)
-            .padding(.top, 20)
+            .padding(.top, 28)
             .padding(.bottom, 122)
         }
         .scrollIndicators(.hidden)
@@ -164,35 +163,6 @@ struct ContentView: View {
             }
             .accessibilityLabel("试听铃声")
         }
-    }
-
-    private var lumeTopBar: some View {
-        HStack {
-            Button {
-                selectedDashboardTab = .profile
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.subheadline)
-                    .foregroundStyle(LumeColor.textMuted)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(.white.opacity(0.05)))
-            }
-
-            Spacer()
-
-            HStack(spacing: 6) {
-                Image(systemName: "sensor.tag.radiowaves.forward.fill")
-                    .font(.caption2)
-                    .foregroundStyle(LumeColor.primary)
-                Text(isWatchReady ? "Connected" : "Waiting")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(LumeColor.textMuted)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(Capsule().fill(.white.opacity(0.055)))
-        }
-        .padding(.bottom, 10)
     }
 
     private var smartAlarmListCard: some View {
@@ -382,7 +352,6 @@ struct ContentView: View {
     private var sleepMonitorPage: some View {
         ScrollView {
             VStack(spacing: 24) {
-                lumeTopBar
                 VStack(spacing: 9) {
                     Text(viewModel.currentTime, format: .dateTime.hour().minute())
                         .font(.system(size: 78, weight: .bold, design: .rounded))
@@ -414,7 +383,7 @@ struct ContentView: View {
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.top, 20)
+            .padding(.top, 28)
             .padding(.bottom, 122)
         }
         .scrollIndicators(.hidden)
@@ -712,16 +681,6 @@ struct ContentView: View {
     private var profilePage: some View {
         ScrollView {
             VStack(spacing: 18) {
-                HStack {
-                    Label("My", systemImage: "person.crop.circle")
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(LumeColor.text)
-                    Spacer()
-                    Image(systemName: "gearshape")
-                        .foregroundStyle(LumeColor.text)
-                        .frame(width: 40, height: 40)
-                        .glassCard(cornerRadius: 20)
-                }
                 profileHeroSection
                 profileStatsGrid
                 profileMenuList
@@ -737,7 +696,7 @@ struct ContentView: View {
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.top, 20)
+            .padding(.top, 28)
             .padding(.bottom, 122)
         }
         .scrollIndicators(.hidden)
