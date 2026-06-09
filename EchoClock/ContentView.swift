@@ -20,13 +20,29 @@ struct ContentView: View {
     @StateObject private var viewModel = AlarmViewModel()
     @State private var showRangePicker = false
     @State private var selectedDashboardTab: DashboardTab = .alarm
+    @State private var isShowingLaunch = true
 
     var body: some View {
-        Group {
-            if session.isAuthenticated {
-                dashboard
-            } else {
-                LoginView(session: session)
+        ZStack {
+            Group {
+                if session.isAuthenticated {
+                    dashboard
+                } else {
+                    LoginView(session: session)
+                }
+            }
+            .opacity(isShowingLaunch ? 0 : 1)
+
+            if isShowingLaunch {
+                AppLaunchView()
+                    .transition(.opacity)
+            }
+        }
+        .task {
+            guard isShowingLaunch else { return }
+            try? await Task.sleep(nanoseconds: 1_150_000_000)
+            withAnimation(.easeOut(duration: 0.35)) {
+                isShowingLaunch = false
             }
         }
     }
@@ -48,7 +64,7 @@ struct ContentView: View {
                     .tabItem { Label("我的", systemImage: "person.crop.circle") }
                     .tag(DashboardTab.profile)
             }
-            .tint(.purple)
+            .tint(.green)
             .toolbarBackground(Color(red: 0.05, green: 0.05, blue: 0.08), for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
 
@@ -80,8 +96,8 @@ struct ContentView: View {
 
     private var alarmHomePage: some View {
         ScrollView {
-            VStack(spacing: 18) {
-                headerSection
+            VStack(spacing: 16) {
+                alarmTopBar
                 smartAlarmHero
                 compactSettingsSection
                 smartSignalSection
@@ -92,6 +108,30 @@ struct ContentView: View {
         }
         .scrollIndicators(.hidden)
         .background(appBackground)
+    }
+
+    private var alarmTopBar: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(viewModel.currentTime, format: .dateTime.weekday(.wide).month().day())
+                    .font(.headline)
+                    .foregroundStyle(.white.opacity(0.9))
+                Text(viewModel.alarm.isOn ? "正在守候你的浅睡眠" : "设置今晚的唤醒计划")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.42))
+            }
+            Spacer()
+            Button {
+                viewModel.previewSelectedSound()
+            } label: {
+                Image(systemName: "speaker.wave.2.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.82))
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(.white.opacity(0.08)))
+            }
+            .accessibilityLabel("试听铃声")
+        }
     }
 
     private var devicePage: some View {
@@ -175,30 +215,38 @@ struct ContentView: View {
     }
 
     private var smartAlarmHero: some View {
-        VStack(spacing: 18) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(viewModel.alarm.isOn ? "智能监测中" : "今晚的智能闹钟")
-                        .font(.headline)
-                        .foregroundStyle(.white.opacity(0.88))
-                    Text(viewModel.alarm.formattedWakeWindow)
-                        .font(.system(size: 42, weight: .light, design: .rounded))
+        VStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .stroke(.white.opacity(0.08), lineWidth: 16)
+                    .frame(width: 210, height: 210)
+                Circle()
+                    .trim(from: 0, to: viewModel.alarm.isOn ? 0.78 : 0.52)
+                    .stroke(
+                        LinearGradient(colors: [.mint, .green], startPoint: .topLeading, endPoint: .bottomTrailing),
+                        style: StrokeStyle(lineWidth: 16, lineCap: .round)
+                    )
+                    .frame(width: 210, height: 210)
+                    .rotationEffect(.degrees(-90))
+
+                VStack(spacing: 8) {
+                    Text(viewModel.alarm.isOn ? "智能监测中" : "今晚唤醒")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.46))
+                    Text(viewModel.alarm.formattedWakeEndTime)
+                        .font(.system(size: 48, weight: .light, design: .rounded))
                         .foregroundStyle(.white)
                         .monospacedDigit()
-                        .minimumScaleFactor(0.72)
+                        .minimumScaleFactor(0.7)
+                    Text(viewModel.alarm.formattedWakeWindow)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.42))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
-
-                Spacer()
-
-                ZStack {
-                    Circle()
-                        .fill(viewModel.alarm.isOn ? .green.opacity(0.18) : .purple.opacity(0.16))
-                        .frame(width: 66, height: 66)
-                    Image(systemName: viewModel.alarm.isOn ? "waveform.path.ecg" : "alarm.fill")
-                        .font(.title2)
-                        .foregroundStyle(viewModel.alarm.isOn ? .green.opacity(0.92) : .purple.opacity(0.9))
-                }
+                .padding(.horizontal, 12)
             }
+            .padding(.top, 8)
 
             HStack(spacing: 10) {
                 intelligencePill(icon: "heart.fill", title: heartRateText, subtitle: "实时心率")
@@ -223,7 +271,7 @@ struct ContentView: View {
                         .fill(
                             viewModel.alarm.isOn
                             ? LinearGradient(colors: [.red.opacity(0.82), .orange.opacity(0.72)], startPoint: .leading, endPoint: .trailing)
-                            : LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing)
+                            : LinearGradient(colors: [.mint, .green], startPoint: .leading, endPoint: .trailing)
                         )
                 )
             }
@@ -232,12 +280,12 @@ struct ContentView: View {
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.42))
                 .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 22)
-                .fill(.white.opacity(0.055))
+                .fill(.white.opacity(0.05))
                 .overlay(
                     RoundedRectangle(cornerRadius: 22)
                         .stroke(.white.opacity(0.08), lineWidth: 1)
@@ -255,7 +303,7 @@ struct ContentView: View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.subheadline)
-                .foregroundStyle(.purple.opacity(0.82))
+                .foregroundStyle(.green.opacity(0.86))
                 .frame(width: 30, height: 30)
                 .background(Circle().fill(.white.opacity(0.08)))
 
@@ -305,7 +353,7 @@ struct ContentView: View {
     private func compactSettingRow(icon: String, title: String, value: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .foregroundStyle(.white.opacity(0.78))
+                .foregroundStyle(.green.opacity(0.86))
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(.white.opacity(0.08)))
 
@@ -366,7 +414,7 @@ struct ContentView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(Capsule().fill(.purple.opacity(0.42)))
+                        .background(Capsule().fill(.green.opacity(0.42)))
                 }
             }
 
@@ -812,6 +860,48 @@ struct ContentView: View {
             }
         }
         .presentationDetents([.medium])
+        .preferredColorScheme(.dark)
+    }
+}
+
+// MARK: - App 启动页
+
+private struct AppLaunchView: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.04, green: 0.05, blue: 0.06),
+                    Color(red: 0.05, green: 0.11, blue: 0.08),
+                    Color(red: 0.03, green: 0.04, blue: 0.06)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                ZStack {
+                    Circle()
+                        .fill(.white.opacity(0.07))
+                        .frame(width: 96, height: 96)
+                    Image(systemName: "moon.stars.fill")
+                        .font(.system(size: 42))
+                        .foregroundStyle(
+                            LinearGradient(colors: [.mint, .green], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
+                }
+
+                VStack(spacing: 8) {
+                    Text("EchoClock")
+                        .font(.system(size: 30, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.94))
+                    Text("智能浅睡眠唤醒")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.46))
+                }
+            }
+        }
         .preferredColorScheme(.dark)
     }
 }
