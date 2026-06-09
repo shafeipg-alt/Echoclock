@@ -17,11 +17,57 @@ struct HeartRateSample: Sendable {
     let timestamp: Date
 }
 
+#if os(watchOS)
+extension HealthKitManager: HKWorkoutSessionDelegate {
+    nonisolated func workoutSession(
+        _ workoutSession: HKWorkoutSession,
+        didChangeTo toState: HKWorkoutSessionState,
+        from fromState: HKWorkoutSessionState,
+        date: Date
+    ) {
+        Task { @MainActor in
+            switch toState {
+            case .running:
+                self.heartRateSourceDescription = "Apple Watch 实时心率"
+            case .ended:
+                self.heartRateSourceDescription = "Workout 已结束"
+            default:
+                break
+            }
+        }
+    }
+
+    nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+        print("[HealthKitManager] Workout session 失败: \(error.localizedDescription)")
+        Task { @MainActor in
+            self.heartRateSourceDescription = "Workout 采集失败"
+        }
+    }
+}
+
+extension HealthKitManager: HKLiveWorkoutBuilderDelegate {
+    nonisolated func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}
+
+    nonisolated func workoutBuilder(
+        _ workoutBuilder: HKLiveWorkoutBuilder,
+        didCollectDataOf collectedTypes: Set<HKSampleType>
+    ) {
+        guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate),
+              collectedTypes.contains(heartRateType) else { return }
+
+        let statistics = workoutBuilder.statistics(for: heartRateType)
+        Task { @MainActor in
+            self.processWorkoutStatistics(statistics)
+        }
+    }
+}
+#endif
+
 // MARK: - HealthKit 管理器
 
 /// 负责 HealthKit 权限申请、心率实时查询，以及在模拟器上自动切换 Mock 数据
 @MainActor
-final class HealthKitManager: ObservableObject {
+final class HealthKitManager: NSObject, ObservableObject {
     static let shared = HealthKitManager()
 
     /// 最新心率（BPM）
@@ -32,6 +78,8 @@ final class HealthKitManager: ObservableObject {
     @Published private(set) var isHealthKitAvailable: Bool = false
     /// 授权是否已完成
     @Published private(set) var isAuthorized: Bool = false
+    /// 当前心率来源描述
+    @Published private(set) var heartRateSourceDescription: String = "等待数据"
 
     private let healthStore = HKHealthStore()
     private var heartRateQuery: HKObserverQuery?
@@ -40,13 +88,20 @@ final class HealthKitManager: ObservableObject {
     private var mockElapsedSeconds: Int = 0
     private var onSampleHandler: ((HeartRateSample) -> Void)?
 
-    private init() {
+    #if os(watchOS)
+    private var workoutSession: HKWorkoutSession?
+    private var workoutBuilder: HKLiveWorkoutBuilder?
+    #endif
+
+    private override init() {
         isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
+        super.init()
     }
 
     /// 由 WatchConnectivity 等外部模块更新显示用的心率值
     func updateLatestHeartRate(_ bpm: Double) {
         latestHeartRate = bpm
+        heartRateSourceDescription = "Apple Watch 回传"
     }
 
     // MARK: - 权限申请
@@ -62,9 +117,13 @@ final class HealthKitManager: ObservableObject {
             HKObjectType.quantityType(forIdentifier: .heartRate)!,
             HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
         ]
+        var shareTypes: Set<HKSampleType> = []
+        #if os(watchOS)
+        shareTypes.insert(HKObjectType.workoutType())
+        #endif
 
         do {
-            try await healthStore.requestAuthorization(toShare: [], read: readTypes)
+            try await healthStore.requestAuthorization(toShare: shareTypes, read: readTypes)
             isAuthorized = true
             return true
         } catch {
@@ -83,7 +142,15 @@ final class HealthKitManager: ObservableObject {
         onSampleHandler = onSample
 
         if isHealthKitAvailable && isAuthorized {
+            #if os(watchOS)
+            #if targetEnvironment(simulator)
+            startMockHeartRateGenerator(onSample: onSample)
+            #else
+            startWorkoutHeartRateSession(onSample: onSample)
+            #endif
+            #else
             startRealHeartRateQuery(onSample: onSample)
+            #endif
         } else {
             startMockHeartRateGenerator(onSample: onSample)
         }
@@ -98,6 +165,10 @@ final class HealthKitManager: ObservableObject {
         mockTimer?.invalidate()
         mockTimer = nil
         onSampleHandler = nil
+
+        #if os(watchOS)
+        stopWorkoutHeartRateSession()
+        #endif
     }
 
     // MARK: - 真实心率查询
@@ -113,6 +184,7 @@ final class HealthKitManager: ObservableObject {
             let hasData = await fetchLatestHeartRateSample(type: heartRateType) != nil
             if hasData {
                 isUsingMockData = false
+                heartRateSourceDescription = "HealthKit 历史心率"
                 enableBackgroundDelivery(for: heartRateType)
                 setupObserverQuery(type: heartRateType, onSample: onSample)
                 // 立即拉取一次最新值
@@ -185,14 +257,90 @@ final class HealthKitManager: ObservableObject {
             return
         }
         latestHeartRate = sample.beatsPerMinute
+        heartRateSourceDescription = "HealthKit 历史心率"
         onSample(sample)
     }
+
+    #if os(watchOS)
+    // MARK: - Watch 后台实时心率采集
+
+    /// Apple Watch 真机后台持续采集心率需要依托 workout session。
+    private func startWorkoutHeartRateSession(onSample: @escaping (HeartRateSample) -> Void) {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            startMockHeartRateGenerator(onSample: onSample)
+            return
+        }
+
+        let configuration = HKWorkoutConfiguration()
+        configuration.activityType = .mindAndBody
+        configuration.locationType = .indoor
+
+        do {
+            let session = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
+            let builder = session.associatedWorkoutBuilder()
+            builder.dataSource = HKLiveWorkoutDataSource(
+                healthStore: healthStore,
+                workoutConfiguration: configuration
+            )
+            session.delegate = self
+            builder.delegate = self
+
+            workoutSession = session
+            workoutBuilder = builder
+            isUsingMockData = false
+            heartRateSourceDescription = "Apple Watch 实时心率"
+
+            let startDate = Date()
+            session.startActivity(with: startDate)
+            builder.beginCollection(withStart: startDate) { [weak self] _, error in
+                if let error {
+                    print("[HealthKitManager] Workout 采集启动失败: \(error.localizedDescription)")
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        self.startRealHeartRateQuery(onSample: onSample)
+                    }
+                }
+            }
+        } catch {
+            print("[HealthKitManager] Workout session 创建失败: \(error.localizedDescription)")
+            startRealHeartRateQuery(onSample: onSample)
+        }
+    }
+
+    private func stopWorkoutHeartRateSession() {
+        let endDate = Date()
+        workoutSession?.end()
+        workoutBuilder?.endCollection(withEnd: endDate) { _, error in
+            if let error {
+                print("[HealthKitManager] Workout 采集结束失败: \(error.localizedDescription)")
+            }
+        }
+        workoutSession = nil
+        workoutBuilder = nil
+    }
+
+    private func processWorkoutStatistics(_ statistics: HKStatistics?) {
+        guard
+            let quantity = statistics?.mostRecentQuantity()
+        else { return }
+
+        let bpm = quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
+        guard bpm > 0 else { return }
+
+        let sample = HeartRateSample(beatsPerMinute: bpm, timestamp: Date())
+        latestHeartRate = bpm
+        isUsingMockData = false
+        heartRateSourceDescription = "Apple Watch 实时心率"
+        onSampleHandler?(sample)
+    }
+    #endif
 
     // MARK: - Mock 心率生成器（模拟器测试用）
 
     /// 模拟心率：前 2 分钟维持低基线，之后逐渐上升以触发浅睡眠判定
     private func startMockHeartRateGenerator(onSample: @escaping (HeartRateSample) -> Void) {
         isUsingMockData = true
+        heartRateSourceDescription = "模拟心率"
         mockElapsedSeconds = 0
         mockBaseline = Double.random(in: 54...62)
 

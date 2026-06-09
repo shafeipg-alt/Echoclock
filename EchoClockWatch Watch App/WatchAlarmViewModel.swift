@@ -19,6 +19,7 @@ final class WatchAlarmViewModel: ObservableObject {
     @Published var isWakeTriggered: Bool = false
     @Published var monitoringState: SleepMonitoringState = .idle
     @Published var isUsingMockData: Bool = false
+    @Published var heartRateSource: String = "等待数据"
 
     init() {
         setupConnectivityCallbacks()
@@ -74,6 +75,7 @@ final class WatchAlarmViewModel: ObservableObject {
                 heartRate = HealthKitManager.shared.latestHeartRate
                 monitoringState = SleepAnalyzer.shared.state
                 isUsingMockData = HealthKitManager.shared.isUsingMockData
+                heartRateSource = HealthKitManager.shared.heartRateSourceDescription
             }
         }
     }

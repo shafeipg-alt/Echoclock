@@ -85,6 +85,12 @@ struct WatchContentView: View {
                     Text("模拟")
                         .font(.system(size: 9))
                         .foregroundStyle(.orange.opacity(0.7))
+                } else {
+                    Text(viewModel.heartRateSource)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.green.opacity(0.7))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
             }
 

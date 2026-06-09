@@ -306,6 +306,7 @@ struct ContentView: View {
             statusRow(icon: "dot.radiowaves.left.and.right", label: "Watch 信号", value: viewModel.wearableSignalStatus)
             statusRow(icon: "waveform.path.ecg", label: "监测状态", value: viewModel.monitoringStatus)
             statusRow(icon: "heart.text.square.fill", label: "实时心率", value: heartRateText)
+            statusRow(icon: "sensor.tag.radiowaves.forward.fill", label: "心率来源", value: viewModel.heartRateSourceStatus)
             if HealthKitManager.shared.isUsingMockData {
                 statusRow(icon: "waveform.path.ecg", label: "心率模式", value: "模拟数据")
             }

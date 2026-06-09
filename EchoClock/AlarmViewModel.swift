@@ -29,6 +29,8 @@ final class AlarmViewModel: ObservableObject {
     @Published var monitoringStatus: String = "待机中"
     /// 最近一次收到 Watch 端信号的描述
     @Published var wearableSignalStatus: String = "等待手表信号"
+    /// 心率数据来源
+    @Published var heartRateSourceStatus: String = "等待数据"
 
     private var clockTimer: Timer?
     private let alarmStorageKey = "EchoClock.alarm"
@@ -204,6 +206,7 @@ final class AlarmViewModel: ObservableObject {
                 self.updateWatchStatus()
                 self.latestHeartRate = HealthKitManager.shared.latestHeartRate
                 self.monitoringStatus = Self.statusText(for: SleepAnalyzer.shared.state)
+                self.heartRateSourceStatus = HealthKitManager.shared.heartRateSourceDescription
                 self.updateWearableSignalStatus()
             }
         }
