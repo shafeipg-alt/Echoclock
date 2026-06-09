@@ -12,6 +12,8 @@ struct EchoClockApp: App {
     init() {
         // 提前激活 WatchConnectivity Session
         _ = WatchConnectivityManager.shared
+        // 初始化 EMAS Serverless 原生客户端配置。
+        _ = EMASServerlessClient.shared
     }
 
     var body: some Scene {

@@ -480,9 +480,11 @@ private struct LoginView: View {
                     authField(icon: "lock.fill", placeholder: "密码", text: $password, isSecure: true)
 
                     Button {
-                        session.signIn(email: email, password: password)
+                        Task {
+                            await session.signIn(email: email, password: password)
+                        }
                     } label: {
-                        Text("登录")
+                        Text(session.isLoading ? "处理中..." : "登录")
                             .font(.headline)
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
@@ -492,7 +494,25 @@ private struct LoginView: View {
                                     .fill(LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing))
                             )
                     }
+                    .disabled(session.isLoading)
                     .padding(.top, 6)
+
+                    Button {
+                        Task {
+                            await session.register(email: email, password: password)
+                        }
+                    } label: {
+                        Text("注册")
+                            .font(.headline)
+                            .foregroundStyle(.white.opacity(0.82))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(.white.opacity(0.08))
+                            )
+                    }
+                    .disabled(session.isLoading)
 
                     Button {
                         session.demoSignIn()
@@ -507,6 +527,13 @@ private struct LoginView: View {
                                     .fill(.white.opacity(0.06))
                             )
                     }
+
+                    if let message = session.authMessage {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.orange.opacity(0.9))
+                            .multilineTextAlignment(.center)
+                    }
                 }
                 .padding(20)
                 .background(
@@ -518,7 +545,7 @@ private struct LoginView: View {
                         )
                 )
 
-                Text("账号系统当前为本地演示状态，后续可接入 MemFire Cloud")
+                Text("账号系统已接入 EMAS Serverless，演示登录仅用于云函数未部署时预览")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.28))
                     .multilineTextAlignment(.center)
